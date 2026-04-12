@@ -46,6 +46,19 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .btn-primary { background: var(--text); color: var(--bg); border: none; border-radius: var(--radius); padding: 8px 16px; font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
 .btn-primary:hover { opacity: 0.85; }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-pdf { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.3); border-radius: var(--radius); padding: 8px 14px; font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: background 0.15s; white-space: nowrap; }
+.btn-pdf:hover { background: rgba(16,185,129,0.22); }
+.albaran-nombre-txt { font-size: 12px; color: var(--text); flex: 1; }
+.pdf-info-box { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); border-radius: var(--radius); padding: 10px 14px; font-size: 13px; color: var(--text2); margin-bottom: 12px; }
+.pdf-seleccionado { text-align: center; }
+.pdf-icon { font-size: 36px; margin-bottom: 8px; }
+.pdf-nombre { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 4px; font-family: var(--mono); }
+.pdf-stock-preview { font-size: 12px; color: var(--text3); margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+.pdf-stock-preview strong { font-family: var(--mono); }
+.txt-green { color: var(--green); }
+.txt-amber { color: var(--amber); }
+.txt-red { color: var(--red); }
+.badge-warn { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(240,165,0,0.2); }
 .btn-albaran { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(167,139,250,0.3); border-radius: var(--radius); padding: 8px 14px; font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: background 0.15s; white-space: nowrap; }
 .btn-albaran:hover { background: rgba(167,139,250,0.2); }
 .btn-tabs { background: var(--bg3); color: var(--text2); border: 1px solid var(--border2); border-radius: var(--radius); padding: 8px 14px; font-size: 13px; font-family: var(--font); cursor: pointer; transition: color 0.15s, background 0.15s; white-space: nowrap; }

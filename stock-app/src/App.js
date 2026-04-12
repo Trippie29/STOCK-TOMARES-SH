@@ -40,16 +40,25 @@ export default function App() {
   const [modalProducto, setModalProducto] = useState(null)
   const [modalVenta, setModalVenta] = useState(null)
   const [modalAlbaran, setModalAlbaran] = useState(false)
+  const [modalVentasPDF, setModalVentasPDF] = useState(false)
 
   const [form, setForm] = useState({ nombre: '', categoria: 'Líquidos', stock_actual: 0, stock_minimo: 5, precio: 0 })
   const [ventaForm, setVentaForm] = useState({ cantidad: 1, referencia: '' })
 
+  // Albarán (foto)
   const [albaranImg, setAlbaranImg] = useState(null)
   const [albaranPreview, setAlbaranPreview] = useState(null)
   const [albaranLoading, setAlbaranLoading] = useState(false)
   const [albaranResultados, setAlbaranResultados] = useState([])
   const [albaranPaso, setAlbaranPaso] = useState(1)
   const fileRef = useRef()
+
+  // PDF Ventas
+  const [pdfFile, setPdfFile] = useState(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfResultados, setPdfResultados] = useState([])
+  const [pdfPaso, setPdfPaso] = useState(1)
+  const pdfRef = useRef()
 
   const showToast = (msg, type = 'ok') => {
     setToast({ msg, type })
@@ -93,14 +102,13 @@ export default function App() {
   const valorTotal = productos.reduce((s, p) => s + (p.stock_actual * p.precio), 0)
   const stockBajo = productos.filter(p => p.stock_actual > 0 && p.stock_actual <= p.stock_minimo).length
   const sinStock = productos.filter(p => p.stock_actual === 0).length
-
   const productosFiltrados = productos.filter(p => {
     const matchCat = catFiltro === 'Todas' || p.categoria === catFiltro
     const matchBus = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
     return matchCat && matchBus
   })
 
-  // ── ALBARÁN CON IA ──────────────────────────────────────────────
+  // ── ALBARÁN CON FOTO ────────────────────────────────────────────
   const handleFotoAlbaran = (e) => {
     const file = e.target.files[0]
     if (!file) return
@@ -120,16 +128,11 @@ export default function App() {
         reader.onerror = rej
         reader.readAsDataURL(albaranImg)
       })
-
       const prompt = `Eres un asistente para una tienda de vapeo en España. Analiza esta imagen: puede ser un albarán, factura, lista de pedido o foto de productos/cajas.
-
 Extrae TODOS los productos visibles con sus cantidades. Si no hay cantidad visible, pon 1.
-
 Responde ÚNICAMENTE con JSON válido sin texto extra:
 {"productos": [{"nombre": "nombre completo del producto", "cantidad": número}]}
-
 Si no puedes identificar productos responde: {"productos": []}
-
 Incluye marca, modelo, sabor, nicotina y cualquier detalle del nombre.`
 
       const resp = await fetch(
@@ -143,29 +146,17 @@ Incluye marca, modelo, sabor, nicotina y cualquier detalle del nombre.`
           })
         }
       )
-
       const data = await resp.json()
       const texto = data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
       const jsonMatch = texto.match(/\{[\s\S]*\}/)
       if (!jsonMatch) throw new Error('Sin respuesta')
       const parsed = JSON.parse(jsonMatch[0])
       const items = parsed.productos || []
-
       const resultados = items.map(item => {
-        const nombreLower = item.nombre.toLowerCase()
-        const palabras = nombreLower.split(' ').filter(w => w.length > 3)
+        const palabras = item.nombre.toLowerCase().split(' ').filter(w => w.length > 3)
         const encontrado = productos.find(p => palabras.some(w => p.nombre.toLowerCase().includes(w)))
-        return {
-          nombre: item.nombre,
-          cantidad: item.cantidad || 1,
-          encontrado: encontrado || null,
-          producto_id: encontrado?.id || null,
-          crear_nuevo: !encontrado,
-          categoria: 'Otros',
-          ignorar: false
-        }
+        return { nombre: item.nombre, cantidad: item.cantidad || 1, encontrado: encontrado || null, producto_id: encontrado?.id || null, crear_nuevo: !encontrado, categoria: 'Otros', ignorar: false }
       })
-
       setAlbaranResultados(resultados)
       setAlbaranPaso(2)
     } catch (err) {
@@ -187,20 +178,120 @@ Incluye marca, modelo, sabor, nicotina y cualquier detalle del nombre.`
           ok++
         }
       } else if (item.crear_nuevo) {
-        const { data: nuevo } = await supabase.from('productos').insert([{
-          nombre: item.nombre, categoria: item.categoria || 'Otros',
-          stock_actual: parseInt(item.cantidad), stock_minimo: 3, precio: 0, updated_at: new Date().toISOString()
-        }]).select().single()
+        const { data: nuevo } = await supabase.from('productos').insert([{ nombre: item.nombre, categoria: item.categoria || 'Otros', stock_actual: parseInt(item.cantidad), stock_minimo: 3, precio: 0, updated_at: new Date().toISOString() }]).select().single()
         if (nuevo) {
           await supabase.from('movimientos').insert([{ producto_id: nuevo.id, tipo: 'entrada', cantidad: parseInt(item.cantidad), referencia: 'Pedido escaneado IA - nuevo' }])
           ok++
         }
       }
     }
-    showToast(`✓ ${ok} productos actualizados desde el albarán`)
+    showToast(`✓ ${ok} productos añadidos al stock`)
     setModalAlbaran(false)
     setAlbaranImg(null); setAlbaranPreview(null); setAlbaranResultados([]); setAlbaranPaso(1)
     setAlbaranLoading(false)
+  }
+
+  // ── PDF VENTAS ──────────────────────────────────────────────────
+  const handlePdfVentas = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setPdfFile(file)
+    setPdfPaso(1)
+    setPdfResultados([])
+  }
+
+  const analizarPdfVentas = async () => {
+    if (!pdfFile) return
+    setPdfLoading(true)
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const reader = new FileReader()
+        reader.onload = () => res(reader.result.split(',')[1])
+        reader.onerror = rej
+        reader.readAsDataURL(pdfFile)
+      })
+
+      const prompt = `Eres un asistente para una tienda de vapeo en España. Este es un PDF de ventas del día de una tienda.
+Extrae TODOS los productos vendidos con sus cantidades.
+El formato suele ser: nombre del producto seguido de la cantidad al final de la línea.
+
+Responde ÚNICAMENTE con JSON válido sin texto extra:
+{"productos": [{"nombre": "nombre completo del producto", "cantidad": número}]}
+
+Si no puedes identificar productos responde: {"productos": []}
+Incluye todos los detalles del nombre: marca, modelo, sabor, mg, ml, etc.`
+
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: prompt },
+                { inline_data: { mime_type: 'application/pdf', data: base64 } }
+              ]
+            }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
+          })
+        }
+      )
+
+      const data = await resp.json()
+      const texto = data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      const jsonMatch = texto.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('Sin respuesta')
+      const parsed = JSON.parse(jsonMatch[0])
+      const items = parsed.productos || []
+
+      const resultados = items.map(item => {
+        const palabras = item.nombre.toLowerCase().split(' ').filter(w => w.length > 3)
+        const encontrado = productos.find(p => palabras.some(w => p.nombre.toLowerCase().includes(w)))
+        return {
+          nombre: item.nombre,
+          cantidad: item.cantidad || 1,
+          encontrado: encontrado || null,
+          producto_id: encontrado?.id || null,
+          ignorar: false
+        }
+      })
+
+      setPdfResultados(resultados)
+      setPdfPaso(2)
+    } catch (err) {
+      showToast('Error al leer el PDF. Inténtalo de nuevo.', 'error')
+    }
+    setPdfLoading(false)
+  }
+
+  const confirmarPdfVentas = async () => {
+    setPdfLoading(true)
+    let ok = 0
+    let noEncontrados = 0
+    const fecha = new Date().toLocaleDateString('es-ES')
+
+    for (const item of pdfResultados) {
+      if (item.ignorar) continue
+      if (item.encontrado && item.producto_id) {
+        const prod = productos.find(p => p.id === item.producto_id)
+        if (prod) {
+          const nuevoStock = Math.max(0, prod.stock_actual - parseInt(item.cantidad))
+          await supabase.from('productos').update({ stock_actual: nuevoStock, updated_at: new Date().toISOString() }).eq('id', item.producto_id)
+          await supabase.from('movimientos').insert([{ producto_id: item.producto_id, tipo: 'venta', cantidad: -parseInt(item.cantidad), referencia: `Ventas PDF ${fecha}` }])
+          ok++
+        }
+      } else {
+        noEncontrados++
+      }
+    }
+
+    let msg = `✓ ${ok} productos descontados del stock`
+    if (noEncontrados > 0) msg += ` · ${noEncontrados} no encontrados`
+    showToast(msg)
+    setModalVentasPDF(false)
+    setPdfFile(null); setPdfResultados([]); setPdfPaso(1)
+    setPdfLoading(false)
   }
 
   // ── PRODUCTO ────────────────────────────────────────────────────
@@ -235,6 +326,7 @@ Incluye marca, modelo, sabor, nicotina y cualquier detalle del nombre.`
   }
 
   const abrirAlbaran = () => { setAlbaranImg(null); setAlbaranPreview(null); setAlbaranResultados([]); setAlbaranPaso(1); setModalAlbaran(true) }
+  const abrirVentasPDF = () => { setPdfFile(null); setPdfResultados([]); setPdfPaso(1); setModalVentasPDF(true) }
 
   if (loading) return <div className="loading-screen"><div className="loading-dot" /><span>Conectando...</span></div>
 
@@ -248,6 +340,7 @@ Incluye marca, modelo, sabor, nicotina y cualquier detalle del nombre.`
           <div className="realtime-badge"><span className="pulse" />EN VIVO</div>
         </div>
         <div className="header-right">
+          <button className="btn-pdf" onClick={abrirVentasPDF}>📄 Ventas PDF</button>
           <button className="btn-albaran" onClick={abrirAlbaran}>📷 Escanear pedido</button>
           <button className="btn-tabs" onClick={() => setTab(tab === 'stock' ? 'historial' : 'stock')}>{tab === 'stock' ? '📋 Historial' : '◈ Stock'}</button>
           <button className="btn-primary" onClick={() => { setForm({ nombre: '', categoria: 'Líquidos', stock_actual: 0, stock_minimo: 5, precio: 0 }); setModalProducto('nuevo') }}>+ Nuevo producto</button>
@@ -353,7 +446,7 @@ Incluye marca, modelo, sabor, nicotina y cualquier detalle del nombre.`
         </Modal>
       )}
 
-      {/* Modal Venta */}
+      {/* Modal Venta manual */}
       {modalVenta && (
         <Modal title={`Venta — ${modalVenta.nombre}`} onClose={() => setModalVenta(null)}>
           <div className="modal-body">
@@ -370,7 +463,7 @@ Incluye marca, modelo, sabor, nicotina y cualquier detalle del nombre.`
         </Modal>
       )}
 
-      {/* Modal Albarán */}
+      {/* Modal Albarán foto */}
       {modalAlbaran && (
         <Modal title="📷 Escanear pedido con IA" onClose={() => setModalAlbaran(false)} wide>
           <div className="modal-body">
@@ -394,38 +487,28 @@ Incluye marca, modelo, sabor, nicotina y cualquier detalle del nombre.`
               )}
               {albaranLoading && <div className="albaran-loading"><div className="loading-dot" /><span>La IA está leyendo el albarán...</span></div>}
             </>)}
-
             {albaranPaso === 2 && (<>
-              <div className="albaran-resumen">
-                La IA encontró <strong>{albaranResultados.length} productos</strong>. Revisa y ajusta si es necesario:
-              </div>
+              <div className="albaran-resumen">La IA encontró <strong>{albaranResultados.length} productos</strong>. Revisa y ajusta si es necesario:</div>
               <div className="albaran-lista">
                 {albaranResultados.map((item, i) => (
                   <div key={i} className={`albaran-item ${item.ignorar ? 'ignorado' : ''}`}>
                     <div className="albaran-item-top">
                       <div className="albaran-item-nombre">
-                        <input className="albaran-nombre-input" value={item.nombre}
-                          onChange={e => { const c = [...albaranResultados]; c[i] = { ...c[i], nombre: e.target.value }; setAlbaranResultados(c) }} />
-                        {item.encontrado
-                          ? <span className="badge badge-ok">✓ Existe en stock</span>
-                          : <span className="badge badge-new">Producto nuevo</span>
-                        }
+                        <input className="albaran-nombre-input" value={item.nombre} onChange={e => { const c = [...albaranResultados]; c[i] = { ...c[i], nombre: e.target.value }; setAlbaranResultados(c) }} />
+                        {item.encontrado ? <span className="badge badge-ok">✓ Existe</span> : <span className="badge badge-new">Nuevo</span>}
                       </div>
                       <div className="albaran-item-qty">
                         <label>Uds</label>
-                        <input type="number" min="1" value={item.cantidad} className="qty-small"
-                          onChange={e => { const c = [...albaranResultados]; c[i] = { ...c[i], cantidad: e.target.value }; setAlbaranResultados(c) }} />
+                        <input type="number" min="1" value={item.cantidad} className="qty-small" onChange={e => { const c = [...albaranResultados]; c[i] = { ...c[i], cantidad: e.target.value }; setAlbaranResultados(c) }} />
                       </div>
-                      <button className={`btn-ignorar ${item.ignorar ? 'btn-ignorar-on' : ''}`}
-                        onClick={() => { const c = [...albaranResultados]; c[i] = { ...c[i], ignorar: !c[i].ignorar }; setAlbaranResultados(c) }}>
+                      <button className={`btn-ignorar ${item.ignorar ? 'btn-ignorar-on' : ''}`} onClick={() => { const c = [...albaranResultados]; c[i] = { ...c[i], ignorar: !c[i].ignorar }; setAlbaranResultados(c) }}>
                         {item.ignorar ? 'Incluir' : 'Ignorar'}
                       </button>
                     </div>
                     {item.crear_nuevo && !item.ignorar && (
                       <div className="albaran-cat-sel">
                         <label>Categoría:</label>
-                        <select value={item.categoria || 'Otros'}
-                          onChange={e => { const c = [...albaranResultados]; c[i] = { ...c[i], categoria: e.target.value }; setAlbaranResultados(c) }}>
+                        <select value={item.categoria || 'Otros'} onChange={e => { const c = [...albaranResultados]; c[i] = { ...c[i], categoria: e.target.value }; setAlbaranResultados(c) }}>
                           {CATEGORIAS.filter(c => c !== 'Todas').map(c => <option key={c}>{c}</option>)}
                         </select>
                       </div>
@@ -436,7 +519,83 @@ Incluye marca, modelo, sabor, nicotina y cualquier detalle del nombre.`
               <div className="modal-footer">
                 <button className="btn-cancel" onClick={() => setAlbaranPaso(1)}>Volver</button>
                 <button className="btn-primary" onClick={confirmarAlbaran} disabled={albaranLoading}>
-                  {albaranLoading ? 'Actualizando...' : `✓ Confirmar ${albaranResultados.filter(r => !r.ignorar).length} productos`}
+                  {albaranLoading ? 'Actualizando...' : `✓ Añadir ${albaranResultados.filter(r => !r.ignorar).length} al stock`}
+                </button>
+              </div>
+            </>)}
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal PDF Ventas */}
+      {modalVentasPDF && (
+        <Modal title="📄 Descontar ventas del PDF" onClose={() => setModalVentasPDF(false)} wide>
+          <div className="modal-body">
+            {pdfPaso === 1 && (<>
+              <div className="pdf-info-box">
+                La IA leerá tu PDF de ventas diarias y descontará automáticamente cada producto del stock.
+              </div>
+              <div className="albaran-zona" onClick={() => pdfRef.current.click()}>
+                {pdfFile
+                  ? <div className="pdf-seleccionado">
+                      <div className="pdf-icon">📄</div>
+                      <div className="pdf-nombre">{pdfFile.name}</div>
+                      <div className="albaran-sub">Listo para analizar</div>
+                    </div>
+                  : <div className="albaran-placeholder">
+                      <div className="albaran-icon">📄</div>
+                      <div className="albaran-hint">Toca para subir el PDF de ventas del día</div>
+                      <div className="albaran-sub">El mismo PDF que exportas de Velneo cada día</div>
+                    </div>
+                }
+              </div>
+              <input ref={pdfRef} type="file" accept="application/pdf" style={{ display: 'none' }} onChange={handlePdfVentas} />
+              {pdfFile && !pdfLoading && (
+                <div className="modal-footer">
+                  <button className="btn-cancel" onClick={() => setPdfFile(null)}>Cambiar PDF</button>
+                  <button className="btn-primary" onClick={analizarPdfVentas}>✦ Analizar con IA</button>
+                </div>
+              )}
+              {pdfLoading && <div className="albaran-loading"><div className="loading-dot" /><span>La IA está leyendo las ventas del PDF...</span></div>}
+            </>)}
+
+            {pdfPaso === 2 && (<>
+              <div className="albaran-resumen">
+                La IA encontró <strong>{pdfResultados.length} productos vendidos</strong>. Revisa antes de descontar:
+              </div>
+              <div className="albaran-lista">
+                {pdfResultados.map((item, i) => (
+                  <div key={i} className={`albaran-item ${item.ignorar ? 'ignorado' : ''}`}>
+                    <div className="albaran-item-top">
+                      <div className="albaran-item-nombre">
+                        <span className="albaran-nombre-txt">{item.nombre}</span>
+                        {item.encontrado
+                          ? <span className="badge badge-ok">✓ En stock</span>
+                          : <span className="badge badge-warn">No encontrado</span>
+                        }
+                      </div>
+                      <div className="albaran-item-qty">
+                        <label>Vendidas</label>
+                        <input type="number" min="1" value={item.cantidad} className="qty-small"
+                          onChange={e => { const c = [...pdfResultados]; c[i] = { ...c[i], cantidad: e.target.value }; setPdfResultados(c) }} />
+                      </div>
+                      <button className={`btn-ignorar ${item.ignorar ? 'btn-ignorar-on' : ''}`}
+                        onClick={() => { const c = [...pdfResultados]; c[i] = { ...c[i], ignorar: !c[i].ignorar }; setPdfResultados(c) }}>
+                        {item.ignorar ? 'Incluir' : 'Ignorar'}
+                      </button>
+                    </div>
+                    {item.encontrado && !item.ignorar && (
+                      <div className="pdf-stock-preview">
+                        Stock actual: <strong>{item.encontrado.stock_actual}</strong> → después: <strong className={item.encontrado.stock_actual - item.cantidad <= 0 ? 'txt-red' : item.encontrado.stock_actual - item.cantidad <= item.encontrado.stock_minimo ? 'txt-amber' : 'txt-green'}>{Math.max(0, item.encontrado.stock_actual - parseInt(item.cantidad))}</strong>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="modal-footer">
+                <button className="btn-cancel" onClick={() => setPdfPaso(1)}>Volver</button>
+                <button className="btn-danger" onClick={confirmarPdfVentas} disabled={pdfLoading}>
+                  {pdfLoading ? 'Descontando...' : `− Descontar ${pdfResultados.filter(r => !r.ignorar && r.encontrado).length} productos`}
                 </button>
               </div>
             </>)}
