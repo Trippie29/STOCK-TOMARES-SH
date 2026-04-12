@@ -1,4 +1,4 @@
 [build]
   base = "stock-app"
   command = "npm run build"
-  publish = "stock-app/build"
+  publish = "build"
