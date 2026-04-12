@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 import './App.css'
 
 const GEMINI_KEY = 'AIzaSyD6oolRMPb5hEAtFHHspvze17BjNyKBop4'
-const CATEGORIAS = ['Todas', 'Líquidos', 'Desechables', 'Pods', 'Mods', 'Resistencias', 'Accesorios', 'Nicotina', 'Otros']
+const CATEGORIAS = ['Todas', 'Nicotina', 'Bases', 'Sales de Nicotina', 'Líquidos', 'Desechables', 'Pods', 'Mods', 'Resistencias', 'Accesorios', 'Otros']
 
 function timeAgo(ts) {
   if (!ts) return '—'
