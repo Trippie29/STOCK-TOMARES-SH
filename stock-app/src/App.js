@@ -51,13 +51,118 @@ function Modal({ title, onClose, children, wide }) {
   )
 }
 
+
+function estadoCaducidad(fecha) {
+  if (!fecha) return { cls: 'nodate', label: 'Sin fecha', dias: null }
+  const hoy = new Date()
+  hoy.setHours(0,0,0,0)
+  const f = new Date(fecha)
+  const dias = Math.floor((f - hoy) / 86400000)
+  if (dias < 0) return { cls: 'caducado', label: 'Caducado', dias }
+  if (dias <= 30) return { cls: 'muypronto', label: 'Muy proximo', dias }
+  if (dias <= 60) return { cls: 'pronto', label: 'Caduca pronto', dias }
+  return { cls: 'ok', label: 'Correcto', dias }
+}
+
+function CaducidadesTab({ caducidades, cadBusqueda, setCadBusqueda, cadFiltro, setCadFiltro, supabase, showToast }) {
+  const filtros = [
+    { value: 'todos', label: 'Todos' },
+    { value: 'caducado', label: 'Caducados' },
+    { value: 'muypronto', label: 'Muy proximos' },
+    { value: 'pronto', label: 'Caduca pronto' },
+    { value: 'ok', label: 'Correctos' },
+    { value: 'nodate', label: 'Sin fecha' },
+  ]
+
+  const caducado = caducidades.filter(c => estadoCaducidad(c.fecha_caducidad).cls === 'caducado').length
+  const muypronto = caducidades.filter(c => estadoCaducidad(c.fecha_caducidad).cls === 'muypronto').length
+  const pronto = caducidades.filter(c => estadoCaducidad(c.fecha_caducidad).cls === 'pronto').length
+
+  const filtrados = caducidades.filter(c => {
+    const est = estadoCaducidad(c.fecha_caducidad)
+    const matchFiltro = cadFiltro === 'todos' || est.cls === cadFiltro
+    const matchBus = c.nombre.toLowerCase().includes(cadBusqueda.toLowerCase())
+    return matchFiltro && matchBus
+  })
+
+  return (
+    <div className="historial">
+      <div className="cad-metrics">
+        <div className="cad-metric caducado-bg">
+          <div className="metric-label">Caducados</div>
+          <div className="metric-value">{caducado}</div>
+        </div>
+        <div className="cad-metric muypronto-bg">
+          <div className="metric-label">Muy proximos</div>
+          <div className="metric-value">{muypronto}</div>
+        </div>
+        <div className="cad-metric pronto-bg">
+          <div className="metric-label">Caduca pronto</div>
+          <div className="metric-value">{pronto}</div>
+        </div>
+        <div className="cad-metric">
+          <div className="metric-label">Total registros</div>
+          <div className="metric-value">{caducidades.length}</div>
+        </div>
+      </div>
+
+      <div className="toolbar" style={{marginTop: '1rem'}}>
+        <input className="search" placeholder="Buscar producto..." value={cadBusqueda} onChange={e => setCadBusqueda(e.target.value)} />
+        <div className="cat-filters">
+          {filtros.map(f => (
+            <button key={f.value} className={'cat-btn' + (cadFiltro === f.value ? ' active' : '')} onClick={() => setCadFiltro(f.value)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="table-wrap" style={{marginTop: '1rem'}}>
+        <table className="tabla">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Categoria</th>
+              <th>Fecha caducidad</th>
+              <th>Dias restantes</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtrados.length === 0
+              ? <tr><td colSpan="5" className="empty">No hay productos que coincidan</td></tr>
+              : filtrados.map(c => {
+                const est = estadoCaducidad(c.fecha_caducidad)
+                return (
+                  <tr key={c.id} className={est.cls === 'caducado' ? 'row-out' : est.cls === 'muypronto' || est.cls === 'pronto' ? 'row-low' : ''}>
+                    <td className="td-nombre">{c.nombre}</td>
+                    <td className="td-cat">{c.categoria}</td>
+                    <td className="td-time">{c.fecha_caducidad ? new Date(c.fecha_caducidad).toLocaleDateString('es-ES') : 'Sin fecha'}</td>
+                    <td className={'td-stock stock-' + (est.cls === 'caducado' ? 'out' : est.cls === 'muypronto' || est.cls === 'pronto' ? 'low' : 'ok')}>
+                      {est.dias !== null ? (est.dias < 0 ? est.dias + ' dias' : '+' + est.dias + ' dias') : '-'}
+                    </td>
+                    <td><span className={'badge badge-cad-' + est.cls}>{est.label}</span></td>
+                  </tr>
+                )
+              })
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [productos, setProductos] = useState([])
   const [movimientos, setMovimientos] = useState([])
+  const [caducidades, setCaducidades] = useState([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [catFiltro, setCatFiltro] = useState('Todas')
   const [tab, setTab] = useState('stock')
+  const [cadBusqueda, setCadBusqueda] = useState('')
+  const [cadFiltro, setCadFiltro] = useState('todos')
   const [toast, setToast] = useState(null)
 
   const [modalProducto, setModalProducto] = useState(null)
@@ -94,6 +199,14 @@ export default function App() {
     setLoading(false)
   }, [])
 
+  const fetchCaducidades = useCallback(async () => {
+    const { data } = await supabase
+      .from('caducidades')
+      .select('*')
+      .order('fecha_caducidad', { ascending: true, nullsFirst: false })
+    setCaducidades(data || [])
+  }, [])
+
   const fetchMovimientos = useCallback(async () => {
     const { data } = await supabase
       .from('movimientos')
@@ -106,14 +219,18 @@ export default function App() {
   useEffect(() => {
     fetchProductos()
     fetchMovimientos()
+    fetchCaducidades()
     const chanProd = supabase.channel('prod-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, fetchProductos)
       .subscribe()
     const chanMov = supabase.channel('mov-rt')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'movimientos' }, fetchMovimientos)
       .subscribe()
-    return () => { supabase.removeChannel(chanProd); supabase.removeChannel(chanMov) }
-  }, [fetchProductos, fetchMovimientos])
+    const chanCad = supabase.channel('cad-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'caducidades' }, fetchCaducidades)
+      .subscribe()
+    return () => { supabase.removeChannel(chanProd); supabase.removeChannel(chanMov); supabase.removeChannel(chanCad) }
+  }, [fetchProductos, fetchMovimientos, fetchCaducidades])
 
   const estadoProducto = (p) => {
     if (p.stock_actual === 0) return { cls: 'out', label: 'Sin stock' }
@@ -342,7 +459,8 @@ export default function App() {
         <div className="header-right">
           <button className="btn-pdf" onClick={() => { setPdfFile(null); setPdfResultados([]); setPdfPaso(1); setModalVentasPDF(true) }}>PDF Ventas</button>
           <button className="btn-albaran" onClick={() => { setAlbaranImg(null); setAlbaranPreview(null); setAlbaranResultados([]); setAlbaranPaso(1); setModalAlbaran(true) }}>Escanear pedido</button>
-          <button className="btn-tabs" onClick={() => setTab(tab === 'stock' ? 'historial' : 'stock')}>{tab === 'stock' ? 'Historial' : 'Stock'}</button>
+          <button className="btn-cad" onClick={() => setTab('caducidades')}>Caducidades</button>
+          <button className="btn-tabs" onClick={() => setTab(tab === 'stock' || tab === 'caducidades' ? 'historial' : 'stock')}>{tab === 'historial' ? 'Stock' : 'Historial'}</button>
           <button className="btn-primary" onClick={() => { setForm({ nombre: '', categoria: 'Nicotina', stock_actual: 0, stock_minimo: 5, precio: 0 }); setModalProducto('nuevo') }}>+ Nuevo producto</button>
         </div>
       </header>
@@ -409,6 +527,16 @@ export default function App() {
             </table>
           </div>
         </>
+      ) : tab === 'caducidades' ? (
+        <CaducidadesTab
+          caducidades={caducidades}
+          cadBusqueda={cadBusqueda}
+          setCadBusqueda={setCadBusqueda}
+          cadFiltro={cadFiltro}
+          setCadFiltro={setCadFiltro}
+          supabase={supabase}
+          showToast={showToast}
+        />
       ) : (
         <div className="historial">
           <h2 className="historial-title">Historial de movimientos</h2>

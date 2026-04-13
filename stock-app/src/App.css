@@ -205,3 +205,20 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
   .tabla th:nth-child(7), .tabla td:nth-child(7) { display: none; }
   .header-right { gap: 6px; }
 }
+
+/* Caducidades */
+.btn-cad { background: rgba(251,146,60,0.12); color: #fb923c; border: 1px solid rgba(251,146,60,0.3); border-radius: var(--radius); padding: 8px 14px; font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: background 0.15s; white-space: nowrap; }
+.btn-cad:hover { background: rgba(251,146,60,0.22); }
+.cad-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 0; }
+.cad-metric { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 20px; }
+.caducado-bg { border-color: rgba(231,76,60,0.3); }
+.caducado-bg .metric-value { color: var(--red); }
+.muypronto-bg { border-color: rgba(251,146,60,0.3); }
+.muypronto-bg .metric-value { color: #fb923c; }
+.pronto-bg { border-color: rgba(240,165,0,0.3); }
+.pronto-bg .metric-value { color: var(--amber); }
+.badge-cad-caducado { background: var(--red-bg); color: var(--red); border: 1px solid rgba(231,76,60,0.2); font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; font-family: var(--mono); white-space: nowrap; display: inline-block; }
+.badge-cad-muypronto { background: rgba(251,146,60,0.1); color: #fb923c; border: 1px solid rgba(251,146,60,0.2); font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; font-family: var(--mono); white-space: nowrap; display: inline-block; }
+.badge-cad-pronto { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(240,165,0,0.2); font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; font-family: var(--mono); white-space: nowrap; display: inline-block; }
+.badge-cad-ok { background: var(--green-bg); color: var(--green); border: 1px solid rgba(45,204,112,0.2); font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; font-family: var(--mono); white-space: nowrap; display: inline-block; }
+.badge-cad-nodate { background: var(--bg3); color: var(--text3); border: 1px solid var(--border); font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; font-family: var(--mono); white-space: nowrap; display: inline-block; }
