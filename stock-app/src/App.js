@@ -54,103 +54,134 @@ function Modal({ title, onClose, children, wide }) {
 
 
 function InformeTab({ movimientos, productos }) {
+  const [periodo, setPeriodo] = React.useState('hoy')
+
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
 
-  const movHoy = movimientos.filter(m => {
-    const d = new Date(m.created_at)
-    d.setHours(0, 0, 0, 0)
-    return d.getTime() === hoy.getTime()
-  })
+  const getInicio = () => {
+    const d = new Date(hoy)
+    if (periodo === 'hoy') return d
+    if (periodo === 'semana') { d.setDate(d.getDate() - 6); return d }
+    if (periodo === 'mes') { d.setDate(1); return d }
+    return d
+  }
 
-  const ventasHoy = movHoy.filter(m => m.tipo === 'venta')
-  const entradasHoy = movHoy.filter(m => m.tipo === 'entrada')
+  const inicio = getInicio()
+  const movPeriodo = movimientos.filter(m => new Date(m.created_at) >= inicio)
+  const ventasPeriodo = movPeriodo.filter(m => m.tipo === 'venta')
+  const entradasPeriodo = movPeriodo.filter(m => m.tipo === 'entrada')
 
-  // Agrupar ventas por producto
+  const totalVendidas = ventasPeriodo.reduce((s, m) => s + Math.abs(m.cantidad), 0)
+  const totalEntradas = entradasPeriodo.reduce((s, m) => s + m.cantidad, 0)
+  const sinStock = productos.filter(p => p.stock_actual === 0).length
+  const stockBajo = productos.filter(p => p.stock_actual > 0 && p.stock_actual <= p.stock_minimo).length
+
   const ventasPorProducto = {}
-  ventasHoy.forEach(m => {
+  ventasPeriodo.forEach(m => {
     const nombre = m.productos ? m.productos.nombre : 'Desconocido'
     if (!ventasPorProducto[nombre]) ventasPorProducto[nombre] = 0
     ventasPorProducto[nombre] += Math.abs(m.cantidad)
   })
-  const topVentas = Object.entries(ventasPorProducto).sort((a, b) => b[1] - a[1]).slice(0, 20)
+  const topVentas = Object.entries(ventasPorProducto).sort((a, b) => b[1] - a[1]).slice(0, 15)
+  const maxVenta = topVentas.length > 0 ? topVentas[0][1] : 1
 
-  // Agrupar entradas por producto
-  const entradasPorProducto = {}
-  entradasHoy.forEach(m => {
-    const nombre = m.productos ? m.productos.nombre : 'Desconocido'
-    if (!entradasPorProducto[nombre]) entradasPorProducto[nombre] = 0
-    entradasPorProducto[nombre] += m.cantidad
+  const ventasPorCat = {}
+  ventasPeriodo.forEach(m => {
+    const prod = productos.find(p => p.id === m.producto_id)
+    const cat = prod ? prod.categoria : 'Otros'
+    if (!ventasPorCat[cat]) ventasPorCat[cat] = 0
+    ventasPorCat[cat] += Math.abs(m.cantidad)
   })
-  const topEntradas = Object.entries(entradasPorProducto).sort((a, b) => b[1] - a[1]).slice(0, 10)
+  const topCats = Object.entries(ventasPorCat).sort((a, b) => b[1] - a[1])
+  const maxCat = topCats.length > 0 ? topCats[0][1] : 1
 
-  const totalUnidadesVendidas = ventasHoy.reduce((s, m) => s + Math.abs(m.cantidad), 0)
-  const totalUnidadesEntradas = entradasHoy.reduce((s, m) => s + m.cantidad, 0)
-  const sinStock = productos.filter(p => p.stock_actual === 0).length
-  const stockBajo = productos.filter(p => p.stock_actual > 0 && p.stock_actual <= p.stock_minimo).length
-
+  const dias7 = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(hoy)
+    d.setDate(d.getDate() - i)
+    const label = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })
+    const total = movimientos.filter(m => {
+      const md = new Date(m.created_at)
+      md.setHours(0,0,0,0)
+      return md.getTime() === d.getTime() && m.tipo === 'venta'
+    }).reduce((s, m) => s + Math.abs(m.cantidad), 0)
+    dias7.push({ label, total })
+  }
+  const maxDia = Math.max(...dias7.map(d => d.total), 1)
   const fechaHoy = hoy.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
   return (
     <div className="historial">
       <div className="informe-header">
         <div className="informe-fecha">{fechaHoy}</div>
+        <div className="periodo-tabs">
+          {[['hoy','Hoy'],['semana','Esta semana'],['mes','Este mes']].map(([v,l]) => (
+            <button key={v} className={'periodo-btn' + (periodo === v ? ' active' : '')} onClick={() => setPeriodo(v)}>{l}</button>
+          ))}
+        </div>
       </div>
 
       <div className="metrics" style={{marginBottom: '1.5rem'}}>
-        <div className="metric"><div className="metric-label">Uds vendidas hoy</div><div className="metric-value">{totalUnidadesVendidas}</div></div>
-        <div className="metric"><div className="metric-label">Uds recibidas hoy</div><div className="metric-value">{totalUnidadesEntradas}</div></div>
+        <div className="metric"><div className="metric-label">Uds vendidas</div><div className="metric-value">{totalVendidas}</div></div>
+        <div className="metric"><div className="metric-label">Uds recibidas</div><div className="metric-value">{totalEntradas}</div></div>
         <div className="metric warn"><div className="metric-label">Stock bajo</div><div className="metric-value">{stockBajo}</div></div>
         <div className="metric danger"><div className="metric-label">Sin stock</div><div className="metric-value">{sinStock}</div></div>
       </div>
 
-      <div className="informe-grid">
+      <div className="graf-titulo">Ventas por dia (ultimos 7 dias)</div>
+      <div className="graf-barras">
+        {dias7.map((d, i) => (
+          <div key={i} className="graf-col">
+            <div className="graf-bar-wrap">
+              <div className="graf-bar-val">{d.total > 0 ? d.total : ''}</div>
+              <div className="graf-bar" style={{height: Math.max(4, (d.total / maxDia) * 140) + 'px'}} />
+            </div>
+            <div className="graf-label">{d.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="informe-grid" style={{marginTop: '1.5rem'}}>
         <div className="informe-col">
-          <div className="informe-titulo">Productos mas vendidos hoy</div>
+          <div className="informe-titulo">Top productos mas vendidos</div>
           {topVentas.length === 0
-            ? <div className="empty" style={{padding: '2rem 0'}}>No hay ventas registradas hoy</div>
-            : <div className="table-wrap">
-                <table className="tabla">
-                  <thead><tr><th>#</th><th>Producto</th><th>Uds vendidas</th></tr></thead>
-                  <tbody>
-                    {topVentas.map(([nombre, qty], i) => (
-                      <tr key={nombre}>
-                        <td className="td-min" style={{width: '30px'}}>{i + 1}</td>
-                        <td className="td-nombre">{nombre}</td>
-                        <td className="td-stock stock-out">-{qty}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            ? <div className="empty" style={{padding: '1.5rem 0'}}>Sin ventas en este periodo</div>
+            : topVentas.map(([nombre, qty], i) => (
+              <div key={nombre} className="rank-row">
+                <span className="rank-num">{i + 1}</span>
+                <div className="rank-info">
+                  <div className="rank-nombre">{nombre}</div>
+                  <div className="rank-bar-wrap">
+                    <div className="rank-bar" style={{width: Math.max(4, (qty / maxVenta) * 100) + '%'}} />
+                  </div>
+                </div>
+                <span className="rank-qty">-{qty}</span>
               </div>
+            ))
           }
         </div>
-
         <div className="informe-col">
-          <div className="informe-titulo">Entradas de stock hoy</div>
-          {topEntradas.length === 0
-            ? <div className="empty" style={{padding: '2rem 0'}}>No hay entradas registradas hoy</div>
-            : <div className="table-wrap">
-                <table className="tabla">
-                  <thead><tr><th>#</th><th>Producto</th><th>Uds recibidas</th></tr></thead>
-                  <tbody>
-                    {topEntradas.map(([nombre, qty], i) => (
-                      <tr key={nombre}>
-                        <td className="td-min" style={{width: '30px'}}>{i + 1}</td>
-                        <td className="td-nombre">{nombre}</td>
-                        <td className="td-stock stock-ok">+{qty}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          <div className="informe-titulo">Ventas por categoria</div>
+          {topCats.length === 0
+            ? <div className="empty" style={{padding: '1.5rem 0'}}>Sin ventas en este periodo</div>
+            : topCats.map(([cat, qty]) => (
+              <div key={cat} className="rank-row">
+                <div className="rank-info">
+                  <div className="rank-nombre">{cat}</div>
+                  <div className="rank-bar-wrap">
+                    <div className="rank-bar rank-bar-cat" style={{width: Math.max(4, (qty / maxCat) * 100) + '%'}} />
+                  </div>
+                </div>
+                <span className="rank-qty">{qty} uds</span>
               </div>
+            ))
           }
         </div>
       </div>
     </div>
   )
 }
-
 function estadoCaducidad(fecha) {
   if (!fecha) return { cls: 'nodate', label: 'Sin fecha', dias: null }
   const hoy = new Date()
