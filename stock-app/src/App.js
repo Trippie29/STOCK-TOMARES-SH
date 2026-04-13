@@ -453,7 +453,7 @@ export default function App() {
 
       <header className="header">
         <div className="header-left">
-          <div className="logo">VapeStock</div>
+          <div className="logo">Sinhumo Tomares Stock</div>
           <div className="realtime-badge"><span className="pulse" />EN VIVO</div>
         </div>
         <div className="header-right">
