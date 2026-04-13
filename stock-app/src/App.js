@@ -462,13 +462,51 @@ export default function App() {
         <div className="header-right">
           <button className="btn-pdf" onClick={() => { setPdfFile(null); setPdfResultados([]); setPdfPaso(1); setModalVentasPDF(true) }}>PDF Ventas</button>
           <button className="btn-albaran" onClick={() => { setAlbaranImg(null); setAlbaranPreview(null); setAlbaranResultados([]); setAlbaranPaso(1); setModalAlbaran(true) }}>Escanear pedido</button>
-          <button className="btn-cad" onClick={() => setTab('caducidades')}>Caducidades</button>
-          <button className="btn-tabs" onClick={() => setTab(tab === 'stock' || tab === 'caducidades' ? 'historial' : 'stock')}>{tab === 'historial' ? 'Stock' : 'Historial'}</button>
+          <button className={"btn-tabs" + (tab === 'sinstock' ? ' btn-tab-active' : '')} onClick={() => setTab('sinstock')}>Sin Stock</button>
+          <button className={"btn-tabs" + (tab === 'stock' ? ' btn-tab-active' : '')} onClick={() => setTab('stock')}>Stock</button>
+          <button className={"btn-cad" + (tab === 'caducidades' ? ' btn-tab-active' : '')} onClick={() => setTab('caducidades')}>Caducidades</button>
+          <button className={"btn-tabs" + (tab === 'historial' ? ' btn-tab-active' : '')} onClick={() => setTab('historial')}>Historial</button>
           <button className="btn-primary" onClick={() => { setForm({ nombre: '', categoria: 'Nicotina', stock_actual: 0, stock_minimo: 5, precio: 0 }); setModalProducto('nuevo') }}>+ Nuevo producto</button>
         </div>
       </header>
 
-      {tab === 'stock' ? (
+      {tab === 'sinstock' ? (
+        <>
+          <div className="metrics">
+            <div className="metric danger"><div className="metric-label">Sin stock</div><div className="metric-value">{sinStock}</div></div>
+            <div className="metric warn"><div className="metric-label">Stock bajo</div><div className="metric-value">{stockBajo}</div></div>
+            <div className="metric"><div className="metric-label">Total productos</div><div className="metric-value">{totalProductos}</div></div>
+            <div className="metric"><div className="metric-label">Valor inventario</div><div className="metric-value">€{valorTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>
+          </div>
+          <div className="toolbar">
+            <input className="search" placeholder="Buscar producto sin stock..." value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+          </div>
+          <div className="table-wrap">
+            <table className="tabla">
+              <thead><tr><th>Producto</th><th>Categoria</th><th>Minimo</th><th>Precio</th><th>Acciones</th></tr></thead>
+              <tbody>
+                {productos.filter(p => p.stock_actual === 0 && p.nombre.toLowerCase().includes(busqueda.toLowerCase())).length === 0
+                  ? <tr><td colSpan="5" className="empty">No hay productos sin stock</td></tr>
+                  : productos.filter(p => p.stock_actual === 0 && p.nombre.toLowerCase().includes(busqueda.toLowerCase())).map(p => (
+                    <tr key={p.id} className="row-out">
+                      <td className="td-nombre">{p.nombre}</td>
+                      <td className="td-cat">{p.categoria}</td>
+                      <td className="td-min">{p.stock_minimo}</td>
+                      <td className="td-precio">€{Number(p.precio).toFixed(2)}</td>
+                      <td>
+                        <div className="acciones">
+                          <button className="btn-entrada" onClick={() => { setModalEntrada(p); setEntradaForm({ cantidad: 1, referencia: '' }) }}>+ Entrada</button>
+                          <button className="btn-edit" onClick={() => { setForm({ nombre: p.nombre, categoria: p.categoria, stock_actual: p.stock_actual, stock_minimo: p.stock_minimo, precio: p.precio }); setModalProducto(p) }}>editar</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : tab === 'stock' ? (
         <>
           <div className="metrics">
             <div className="metric"><div className="metric-label">Total productos</div><div className="metric-value">{totalProductos}</div></div>
