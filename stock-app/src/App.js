@@ -62,11 +62,13 @@ export default function App() {
 
   const [modalProducto, setModalProducto] = useState(null)
   const [modalVenta, setModalVenta] = useState(null)
+  const [modalEntrada, setModalEntrada] = useState(null)
   const [modalAlbaran, setModalAlbaran] = useState(false)
   const [modalVentasPDF, setModalVentasPDF] = useState(false)
 
   const [form, setForm] = useState({ nombre: '', categoria: 'Nicotina', stock_actual: 0, stock_minimo: 5, precio: 0 })
   const [ventaForm, setVentaForm] = useState({ cantidad: 1, referencia: '' })
+  const [entradaForm, setEntradaForm] = useState({ cantidad: 1, referencia: '' })
 
   const [albaranImg, setAlbaranImg] = useState(null)
   const [albaranPreview, setAlbaranPreview] = useState(null)
@@ -310,6 +312,16 @@ export default function App() {
     setVentaForm({ cantidad: 1, referencia: '' })
   }
 
+  const registrarEntrada = async () => {
+    const qty = parseInt(entradaForm.cantidad) || 1
+    if (qty <= 0) return showToast('Cantidad invalida', 'error')
+    await supabase.from('productos').update({ stock_actual: modalEntrada.stock_actual + qty, updated_at: new Date().toISOString() }).eq('id', modalEntrada.id)
+    await supabase.from('movimientos').insert([{ producto_id: modalEntrada.id, tipo: 'entrada', cantidad: qty, referencia: entradaForm.referencia || 'Entrada manual' }])
+    showToast('+' + qty + ' uds anadidas al stock')
+    setModalEntrada(null)
+    setEntradaForm({ cantidad: 1, referencia: '' })
+  }
+
   const eliminarProducto = async (id) => {
     if (!window.confirm('Eliminar este producto?')) return
     await supabase.from('productos').delete().eq('id', id)
@@ -384,11 +396,7 @@ export default function App() {
                         <td>
                           <div className="acciones">
                             <button className="btn-venta" onClick={() => { setModalVenta(p); setVentaForm({ cantidad: 1, referencia: '' }) }}>- Venta</button>
-                            <button className="btn-entrada" onClick={async () => {
-                              await supabase.from('productos').update({ stock_actual: p.stock_actual + 1, updated_at: new Date().toISOString() }).eq('id', p.id)
-                              await supabase.from('movimientos').insert([{ producto_id: p.id, tipo: 'entrada', cantidad: 1, referencia: 'Entrada manual' }])
-                              showToast('+1 unidad')
-                            }}>+ Entrada</button>
+                            <button className="btn-entrada" onClick={() => { setModalEntrada(p); setEntradaForm({ cantidad: 1, referencia: '' }) }}>+ Entrada</button>
                             <button className="btn-edit" onClick={() => { setForm({ nombre: p.nombre, categoria: p.categoria, stock_actual: p.stock_actual, stock_minimo: p.stock_minimo, precio: p.precio }); setModalProducto(p) }}>editar</button>
                             <button className="btn-del" onClick={() => eliminarProducto(p.id)}>x</button>
                           </div>
@@ -450,6 +458,22 @@ export default function App() {
             <div className="modal-footer">
               <button className="btn-cancel" onClick={() => setModalProducto(null)}>Cancelar</button>
               <button className="btn-primary" onClick={guardarProducto}>Guardar</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {modalEntrada && (
+        <Modal title={'+ Entrada - ' + modalEntrada.nombre} onClose={() => setModalEntrada(null)}>
+          <div className="modal-body">
+            <div className="venta-info">Stock actual: <strong>{modalEntrada.stock_actual} uds</strong></div>
+            <label>Unidades a anadir</label>
+            <input type="number" min="1" value={entradaForm.cantidad} onChange={e => setEntradaForm({ ...entradaForm, cantidad: e.target.value })} />
+            <label>Referencia (opcional)</label>
+            <input value={entradaForm.referencia} onChange={e => setEntradaForm({ ...entradaForm, referencia: e.target.value })} placeholder="Ej: Pedido mayo, Albaran #123" />
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={() => setModalEntrada(null)}>Cancelar</button>
+              <button className="btn-entrada-modal" onClick={registrarEntrada}>+ Confirmar entrada</button>
             </div>
           </div>
         </Modal>
