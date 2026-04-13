@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from './supabase'
 import './App.css'
 
@@ -52,6 +52,105 @@ function Modal({ title, onClose, children, wide }) {
 }
 
 
+
+function InformeTab({ movimientos, productos }) {
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+
+  const movHoy = movimientos.filter(m => {
+    const d = new Date(m.created_at)
+    d.setHours(0, 0, 0, 0)
+    return d.getTime() === hoy.getTime()
+  })
+
+  const ventasHoy = movHoy.filter(m => m.tipo === 'venta')
+  const entradasHoy = movHoy.filter(m => m.tipo === 'entrada')
+
+  // Agrupar ventas por producto
+  const ventasPorProducto = {}
+  ventasHoy.forEach(m => {
+    const nombre = m.productos ? m.productos.nombre : 'Desconocido'
+    if (!ventasPorProducto[nombre]) ventasPorProducto[nombre] = 0
+    ventasPorProducto[nombre] += Math.abs(m.cantidad)
+  })
+  const topVentas = Object.entries(ventasPorProducto).sort((a, b) => b[1] - a[1]).slice(0, 20)
+
+  // Agrupar entradas por producto
+  const entradasPorProducto = {}
+  entradasHoy.forEach(m => {
+    const nombre = m.productos ? m.productos.nombre : 'Desconocido'
+    if (!entradasPorProducto[nombre]) entradasPorProducto[nombre] = 0
+    entradasPorProducto[nombre] += m.cantidad
+  })
+  const topEntradas = Object.entries(entradasPorProducto).sort((a, b) => b[1] - a[1]).slice(0, 10)
+
+  const totalUnidadesVendidas = ventasHoy.reduce((s, m) => s + Math.abs(m.cantidad), 0)
+  const totalUnidadesEntradas = entradasHoy.reduce((s, m) => s + m.cantidad, 0)
+  const sinStock = productos.filter(p => p.stock_actual === 0).length
+  const stockBajo = productos.filter(p => p.stock_actual > 0 && p.stock_actual <= p.stock_minimo).length
+
+  const fechaHoy = hoy.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+
+  return (
+    <div className="historial">
+      <div className="informe-header">
+        <div className="informe-fecha">{fechaHoy}</div>
+      </div>
+
+      <div className="metrics" style={{marginBottom: '1.5rem'}}>
+        <div className="metric"><div className="metric-label">Uds vendidas hoy</div><div className="metric-value">{totalUnidadesVendidas}</div></div>
+        <div className="metric"><div className="metric-label">Uds recibidas hoy</div><div className="metric-value">{totalUnidadesEntradas}</div></div>
+        <div className="metric warn"><div className="metric-label">Stock bajo</div><div className="metric-value">{stockBajo}</div></div>
+        <div className="metric danger"><div className="metric-label">Sin stock</div><div className="metric-value">{sinStock}</div></div>
+      </div>
+
+      <div className="informe-grid">
+        <div className="informe-col">
+          <div className="informe-titulo">Productos mas vendidos hoy</div>
+          {topVentas.length === 0
+            ? <div className="empty" style={{padding: '2rem 0'}}>No hay ventas registradas hoy</div>
+            : <div className="table-wrap">
+                <table className="tabla">
+                  <thead><tr><th>#</th><th>Producto</th><th>Uds vendidas</th></tr></thead>
+                  <tbody>
+                    {topVentas.map(([nombre, qty], i) => (
+                      <tr key={nombre}>
+                        <td className="td-min" style={{width: '30px'}}>{i + 1}</td>
+                        <td className="td-nombre">{nombre}</td>
+                        <td className="td-stock stock-out">-{qty}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+          }
+        </div>
+
+        <div className="informe-col">
+          <div className="informe-titulo">Entradas de stock hoy</div>
+          {topEntradas.length === 0
+            ? <div className="empty" style={{padding: '2rem 0'}}>No hay entradas registradas hoy</div>
+            : <div className="table-wrap">
+                <table className="tabla">
+                  <thead><tr><th>#</th><th>Producto</th><th>Uds recibidas</th></tr></thead>
+                  <tbody>
+                    {topEntradas.map(([nombre, qty], i) => (
+                      <tr key={nombre}>
+                        <td className="td-min" style={{width: '30px'}}>{i + 1}</td>
+                        <td className="td-nombre">{nombre}</td>
+                        <td className="td-stock stock-ok">+{qty}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+          }
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function estadoCaducidad(fecha) {
   if (!fecha) return { cls: 'nodate', label: 'Sin fecha', dias: null }
   const hoy = new Date()
@@ -65,6 +164,8 @@ function estadoCaducidad(fecha) {
 }
 
 function CaducidadesTab({ caducidades, cadBusqueda, setCadBusqueda, cadFiltro, setCadFiltro, supabase, showToast }) {
+  const [cadFabricante, setCadFabricante] = React.useState('Todos')
+
   const filtros = [
     { value: 'todos', label: 'Todos' },
     { value: 'caducado', label: 'Caducados' },
@@ -78,11 +179,15 @@ function CaducidadesTab({ caducidades, cadBusqueda, setCadBusqueda, cadFiltro, s
   const muypronto = caducidades.filter(c => estadoCaducidad(c.fecha_caducidad).cls === 'muypronto').length
   const pronto = caducidades.filter(c => estadoCaducidad(c.fecha_caducidad).cls === 'pronto').length
 
+  // Get unique categories for filter
+  const categorias = ['Todos', ...new Set(caducidades.map(c => c.categoria).filter(Boolean).sort())]
+
   const filtrados = caducidades.filter(c => {
     const est = estadoCaducidad(c.fecha_caducidad)
     const matchFiltro = cadFiltro === 'todos' || est.cls === cadFiltro
     const matchBus = c.nombre.toLowerCase().includes(cadBusqueda.toLowerCase())
-    return matchFiltro && matchBus
+    const matchCat = cadFabricante === 'Todos' || c.categoria === cadFabricante
+    return matchFiltro && matchBus && matchCat
   })
 
   return (
@@ -108,6 +213,9 @@ function CaducidadesTab({ caducidades, cadBusqueda, setCadBusqueda, cadFiltro, s
 
       <div className="toolbar" style={{marginTop: '1rem'}}>
         <input className="search" placeholder="Buscar producto..." value={cadBusqueda} onChange={e => setCadBusqueda(e.target.value)} />
+        <select className="search" style={{width: 'auto'}} value={cadFabricante} onChange={e => setCadFabricante(e.target.value)}>
+          {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
         <div className="cat-filters">
           {filtros.map(f => (
             <button key={f.value} className={'cat-btn' + (cadFiltro === f.value ? ' active' : '')} onClick={() => setCadFiltro(f.value)}>
@@ -466,6 +574,7 @@ export default function App() {
           <button className={"btn-tabs" + (tab === 'stock' ? ' btn-tab-active' : '')} onClick={() => setTab('stock')}>Stock</button>
           <button className={"btn-cad" + (tab === 'caducidades' ? ' btn-tab-active' : '')} onClick={() => setTab('caducidades')}>Caducidades</button>
           <button className={"btn-tabs" + (tab === 'historial' ? ' btn-tab-active' : '')} onClick={() => setTab('historial')}>Historial</button>
+          <button className={"btn-informe" + (tab === 'informe' ? ' btn-tab-active' : '')} onClick={() => setTab('informe')}>Informe</button>
           <button className="btn-primary" onClick={() => { setForm({ nombre: '', categoria: 'Nicotina', stock_actual: 0, stock_minimo: 5, precio: 0 }); setModalProducto('nuevo') }}>+ Nuevo producto</button>
         </div>
       </header>
@@ -568,6 +677,8 @@ export default function App() {
             </table>
           </div>
         </>
+      ) : tab === 'informe' ? (
+        <InformeTab movimientos={movimientos} productos={productos} />
       ) : tab === 'caducidades' ? (
         <CaducidadesTab
           caducidades={caducidades}
