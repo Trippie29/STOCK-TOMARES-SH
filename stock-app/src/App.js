@@ -55,7 +55,6 @@ function Modal({ title, onClose, children, wide }) {
 
 function InformeTab({ movimientos, productos }) {
   const [periodo, setPeriodo] = React.useState('hoy')
-
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
 
@@ -63,15 +62,13 @@ function InformeTab({ movimientos, productos }) {
     const d = new Date(hoy)
     if (periodo === 'hoy') return d
     if (periodo === 'semana') { d.setDate(d.getDate() - 6); return d }
-    if (periodo === 'mes') { d.setDate(1); return d }
-    return d
+    d.setDate(1); return d
   }
 
   const inicio = getInicio()
   const movPeriodo = movimientos.filter(m => new Date(m.created_at) >= inicio)
   const ventasPeriodo = movPeriodo.filter(m => m.tipo === 'venta')
   const entradasPeriodo = movPeriodo.filter(m => m.tipo === 'entrada')
-
   const totalVendidas = ventasPeriodo.reduce((s, m) => s + Math.abs(m.cantidad), 0)
   const totalEntradas = entradasPeriodo.reduce((s, m) => s + m.cantidad, 0)
   const sinStock = productos.filter(p => p.stock_actual === 0).length
@@ -121,14 +118,12 @@ function InformeTab({ movimientos, productos }) {
           ))}
         </div>
       </div>
-
       <div className="metrics" style={{marginBottom: '1.5rem'}}>
         <div className="metric"><div className="metric-label">Uds vendidas</div><div className="metric-value">{totalVendidas}</div></div>
         <div className="metric"><div className="metric-label">Uds recibidas</div><div className="metric-value">{totalEntradas}</div></div>
         <div className="metric warn"><div className="metric-label">Stock bajo</div><div className="metric-value">{stockBajo}</div></div>
         <div className="metric danger"><div className="metric-label">Sin stock</div><div className="metric-value">{sinStock}</div></div>
       </div>
-
       <div className="graf-titulo">Ventas por dia (ultimos 7 dias)</div>
       <div className="graf-barras">
         {dias7.map((d, i) => (
@@ -141,7 +136,6 @@ function InformeTab({ movimientos, productos }) {
           </div>
         ))}
       </div>
-
       <div className="informe-grid" style={{marginTop: '1.5rem'}}>
         <div className="informe-col">
           <div className="informe-titulo">Top productos mas vendidos</div>
