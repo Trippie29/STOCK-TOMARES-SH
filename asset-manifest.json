@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/STOCK-TOMARES-SH/static/css/main.58c5099a.css",
-    "main.js": "/STOCK-TOMARES-SH/static/js/main.45710575.js",
+    "main.css": "/STOCK-TOMARES-SH/static/css/main.c573a298.css",
+    "main.js": "/STOCK-TOMARES-SH/static/js/main.138edf1a.js",
     "index.html": "/STOCK-TOMARES-SH/index.html",
-    "main.58c5099a.css.map": "/STOCK-TOMARES-SH/static/css/main.58c5099a.css.map",
-    "main.45710575.js.map": "/STOCK-TOMARES-SH/static/js/main.45710575.js.map"
+    "main.c573a298.css.map": "/STOCK-TOMARES-SH/static/css/main.c573a298.css.map",
+    "main.138edf1a.js.map": "/STOCK-TOMARES-SH/static/js/main.138edf1a.js.map"
   },
   "entrypoints": [
-    "static/css/main.58c5099a.css",
-    "static/js/main.45710575.js"
+    "static/css/main.c573a298.css",
+    "static/js/main.138edf1a.js"
   ]
 }
