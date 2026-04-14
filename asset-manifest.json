@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/STOCK-TOMARES-SH/static/css/main.58c5099a.css",
+    "main.js": "/STOCK-TOMARES-SH/static/js/main.45710575.js",
+    "index.html": "/STOCK-TOMARES-SH/index.html",
+    "main.58c5099a.css.map": "/STOCK-TOMARES-SH/static/css/main.58c5099a.css.map",
+    "main.45710575.js.map": "/STOCK-TOMARES-SH/static/js/main.45710575.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.58c5099a.css",
+    "static/js/main.45710575.js"
+  ]
+}
