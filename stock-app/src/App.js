@@ -616,11 +616,24 @@ export default function App() {
       )
 
       const data = await resp.json()
+      if (data.error) throw new Error(data.error.message || 'API error')
       const texto = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] ? data.candidates[0].content.parts[0].text : ''
+      if (!texto) throw new Error('La IA no devolvio respuesta')
       const jsonMatch = texto.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) throw new Error('Sin respuesta')
+      if (!jsonMatch) {
+        // No products with dates found
+        setFechasResultados([])
+        setFechasPaso(2)
+        return
+      }
       const parsed = JSON.parse(jsonMatch[0])
       const items = parsed.productos || []
+
+      if (items.length === 0) {
+        setFechasResultados([])
+        setFechasPaso(2)
+        return
+      }
 
       const resultados = items.map(item => {
         const palabras = item.nombre.toLowerCase().split(' ').filter(w => w.length > 3)
@@ -637,7 +650,8 @@ export default function App() {
       setFechasResultados(resultados)
       setFechasPaso(2)
     } catch (err) {
-      showToast('Error al analizar la imagen.', 'error')
+      console.error('Fechas error:', err)
+      showToast('Error: ' + (err.message || 'Fallo al analizar'), 'error')
     }
     setFechasLoading(false)
   }
