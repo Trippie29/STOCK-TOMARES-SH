@@ -302,6 +302,7 @@ export default function App() {
   const [modalVenta, setModalVenta] = useState(null)
   const [modalEntrada, setModalEntrada] = useState(null)
   const [modalAlbaran, setModalAlbaran] = useState(false)
+  const [modalFechas, setModalFechas] = useState(false)
   const [modalVentasPDF, setModalVentasPDF] = useState(false)
 
   const [form, setForm] = useState({ nombre: '', categoria: 'Nicotina', stock_actual: 0, stock_minimo: 5, precio: 0 })
@@ -314,6 +315,13 @@ export default function App() {
   const [albaranResultados, setAlbaranResultados] = useState([])
   const [albaranPaso, setAlbaranPaso] = useState(1)
   const fileRef = useRef()
+
+  const [fechasImg, setFechasImg] = useState(null)
+  const [fechasPreview, setFechasPreview] = useState(null)
+  const [fechasLoading, setFechasLoading] = useState(false)
+  const [fechasResultados, setFechasResultados] = useState([])
+  const [fechasPaso, setFechasPaso] = useState(1)
+  const fechasRef = useRef()
 
   const [pdfFile, setPdfFile] = useState(null)
   const [pdfLoading, setPdfLoading] = useState(false)
@@ -572,6 +580,90 @@ export default function App() {
     setEntradaForm({ cantidad: 1, referencia: '' })
   }
 
+
+  const handleFotoFechas = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setFechasImg(file)
+    setFechasPreview(URL.createObjectURL(file))
+    setFechasPaso(1)
+    setFechasResultados([])
+  }
+
+  const analizarFechas = async () => {
+    if (!fechasImg) return
+    setFechasLoading(true)
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const reader = new FileReader()
+        reader.onload = () => res(reader.result.split(',')[1])
+        reader.onerror = rej
+        reader.readAsDataURL(fechasImg)
+      })
+
+      const prompt = 'Eres un asistente para una tienda de vapeo en Espana. Analiza este albaran o documento. Extrae TODOS los productos que tengan una fecha de caducidad escrita al lado (puede estar escrita a mano con boligrafo). El formato puede ser DD/MM/AAAA, MM/AAAA o cualquier formato de fecha. Responde UNICAMENTE con JSON valido sin texto extra: {"productos": [{"nombre": "nombre del producto", "fecha": "YYYY-MM-DD"}]}. Si no puedes identificar productos con fechas responde: {"productos": []}. Solo incluye productos que tengan una fecha de caducidad visible.'
+
+      const resp = await fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_KEY,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: fechasImg.type || 'image/jpeg', data: base64 } }] }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
+          })
+        }
+      )
+
+      const data = await resp.json()
+      const texto = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] ? data.candidates[0].content.parts[0].text : ''
+      const jsonMatch = texto.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('Sin respuesta')
+      const parsed = JSON.parse(jsonMatch[0])
+      const items = parsed.productos || []
+
+      const resultados = items.map(item => {
+        const palabras = item.nombre.toLowerCase().split(' ').filter(w => w.length > 3)
+        const encontrado = caducidades.find(c => palabras.some(w => c.nombre.toLowerCase().includes(w)))
+        return {
+          nombre: item.nombre,
+          fecha: item.fecha,
+          encontrado: encontrado || null,
+          ignorar: false,
+          yaExiste: encontrado && encontrado.fecha_caducidad === item.fecha
+        }
+      })
+
+      setFechasResultados(resultados)
+      setFechasPaso(2)
+    } catch (err) {
+      showToast('Error al analizar la imagen.', 'error')
+    }
+    setFechasLoading(false)
+  }
+
+  const confirmarFechas = async () => {
+    setFechasLoading(true)
+    let ok = 0
+    let repetidas = 0
+    for (const item of fechasResultados) {
+      if (item.ignorar || item.yaExiste) { if (item.yaExiste) repetidas++; continue }
+      const { error } = await supabase.from('caducidades').insert([{
+        nombre: item.nombre,
+        categoria: item.encontrado ? item.encontrado.categoria : 'Otros',
+        fecha_caducidad: item.fecha,
+        hoja_origen: 'Albaran escaneado'
+      }])
+      if (!error) ok++
+    }
+    let msg = ok + ' fechas nuevas anadidas'
+    if (repetidas > 0) msg += ' - ' + repetidas + ' ya existian (no duplicadas)'
+    showToast(msg)
+    setModalFechas(false)
+    setFechasImg(null); setFechasPreview(null); setFechasResultados([]); setFechasPaso(1)
+    setFechasLoading(false)
+  }
+
   const eliminarProducto = async (id) => {
     if (!window.confirm('Eliminar este producto?')) return
     await supabase.from('productos').delete().eq('id', id)
@@ -594,7 +686,8 @@ export default function App() {
         </div>
         <div className="header-right">
           <button className="btn-pdf" onClick={() => { setPdfFile(null); setPdfResultados([]); setPdfPaso(1); setModalVentasPDF(true) }}>PDF Ventas</button>
-          <button className="btn-albaran" onClick={() => { setAlbaranImg(null); setAlbaranPreview(null); setAlbaranResultados([]); setAlbaranPaso(1); setModalAlbaran(true) }}>Escanear pedido</button>
+          <button className="btn-albaran" onClick={() => { setAlbaranImg(null); setAlbaranPreview(null); setAlbaranResultados([]); setAlbaranPaso(1); setModalAlbaran(true) }}>📦 Stock pedido</button>
+          <button className="btn-fechas" onClick={() => { setFechasImg(null); setFechasPreview(null); setFechasResultados([]); setFechasPaso(1); setModalFechas(true) }}>📅 Fechas pedido</button>
           <button className={"btn-tabs" + (tab === 'sinstock' ? ' btn-tab-active' : '')} onClick={() => setTab('sinstock')}>Sin Stock</button>
           <button className={"btn-tabs" + (tab === 'stock' ? ' btn-tab-active' : '')} onClick={() => setTab('stock')}>Stock</button>
           <button className={"btn-cad" + (tab === 'caducidades' ? ' btn-tab-active' : '')} onClick={() => setTab('caducidades')}>Caducidades</button>
@@ -935,6 +1028,80 @@ export default function App() {
           </div>
         </Modal>
       )}
+
+      {modalFechas && (
+        <Modal title="📅 Actualizar fechas de caducidad" onClose={() => setModalFechas(false)} wide>
+          <div className="modal-body">
+            {fechasPaso === 1 && (<>
+              <div className="pdf-info-box">
+                Sube foto del albaran con las fechas escritas a mano. La IA leeara solo las fechas, sin tocar el stock.
+              </div>
+              <div className="albaran-zona" onClick={() => fechasRef.current.click()}>
+                {fechasPreview
+                  ? <img src={fechasPreview} alt="Albaran fechas" className="albaran-preview" />
+                  : <div className="albaran-placeholder">
+                      <div className="albaran-icon">📅</div>
+                      <div className="albaran-hint">Foto del albaran con fechas escritas a mano</div>
+                      <div className="albaran-sub">La IA leera las fechas junto a cada producto</div>
+                    </div>
+                }
+              </div>
+              <input ref={fechasRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleFotoFechas} />
+              {fechasPreview && !fechasLoading && (
+                <div className="modal-footer">
+                  <button className="btn-cancel" onClick={() => { setFechasImg(null); setFechasPreview(null) }}>Cambiar foto</button>
+                  <button className="btn-primary" onClick={analizarFechas}>📅 Analizar fechas con IA</button>
+                </div>
+              )}
+              {fechasLoading && <div className="albaran-loading"><div className="loading-dot" /><span>La IA esta leyendo las fechas...</span></div>}
+            </>)}
+
+            {fechasPaso === 2 && (<>
+              <div className="albaran-resumen">
+                La IA encontro <strong>{fechasResultados.length} productos con fecha</strong>. Revisa antes de guardar:
+              </div>
+              <div className="albaran-lista">
+                {fechasResultados.map((item, i) => (
+                  <div key={i} className={'albaran-item' + (item.ignorar ? ' ignorado' : '')}>
+                    <div className="albaran-item-top">
+                      <div className="albaran-item-nombre">
+                        <span className="albaran-nombre-txt">{item.nombre}</span>
+                        {item.yaExiste
+                          ? <span className="badge badge-warn">Ya existe</span>
+                          : item.encontrado
+                            ? <span className="badge badge-ok">En caducidades</span>
+                            : <span className="badge badge-new">Nuevo</span>
+                        }
+                      </div>
+                      <div className="albaran-item-qty">
+                        <label>Fecha</label>
+                        <input type="date" value={item.fecha || ''} className="qty-small" style={{width: '130px'}}
+                          onChange={e => { const c = [...fechasResultados]; c[i] = { ...c[i], fecha: e.target.value, yaExiste: false }; setFechasResultados(c) }} />
+                      </div>
+                      <button className={'btn-ignorar' + (item.ignorar ? ' btn-ignorar-on' : '')}
+                        onClick={() => { const c = [...fechasResultados]; c[i] = { ...c[i], ignorar: !c[i].ignorar }; setFechasResultados(c) }}>
+                        {item.ignorar ? 'Incluir' : 'Ignorar'}
+                      </button>
+                    </div>
+                    {item.yaExiste && !item.ignorar && (
+                      <div className="pdf-stock-preview" style={{color: 'var(--amber)'}}>
+                        Esta fecha ya existe en caducidades — no se duplicara
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="modal-footer">
+                <button className="btn-cancel" onClick={() => setFechasPaso(1)}>Volver</button>
+                <button className="btn-primary" onClick={confirmarFechas} disabled={fechasLoading}>
+                  {fechasLoading ? 'Guardando...' : 'Guardar ' + fechasResultados.filter(r => !r.ignorar && !r.yaExiste).length + ' fechas nuevas'}
+                </button>
+              </div>
+            </>)}
+          </div>
+        </Modal>
+      )}
+
     </div>
   )
 }
