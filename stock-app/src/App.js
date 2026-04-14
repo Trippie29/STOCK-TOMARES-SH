@@ -296,6 +296,7 @@ export default function App() {
   const [tab, setTab] = useState('stock')
   const [cadBusqueda, setCadBusqueda] = useState('')
   const [cadFiltro, setCadFiltro] = useState('todos')
+  const [temaOscuro, setTemaOscuro] = useState(() => localStorage.getItem('tema') !== 'claro')
   const [toast, setToast] = useState(null)
 
   const [modalProducto, setModalProducto] = useState(null)
@@ -687,7 +688,7 @@ export default function App() {
   if (loading) return <div className="loading-screen"><div className="loading-dot" /><span>Conectando...</span></div>
 
   return (
-    <div className="app">
+    <div className={'app' + (temaOscuro ? '' : ' tema-claro')}>
       {toast && <div className={'toast toast-' + toast.type}>{toast.msg}</div>}
 
       <header className="header">
@@ -707,6 +708,7 @@ export default function App() {
           <button className={"btn-cad" + (tab === 'caducidades' ? ' btn-tab-active' : '')} onClick={() => setTab('caducidades')}>Caducidades</button>
           <button className={"btn-tabs" + (tab === 'historial' ? ' btn-tab-active' : '')} onClick={() => setTab('historial')}>Historial</button>
           <button className={"btn-informe" + (tab === 'informe' ? ' btn-tab-active' : '')} onClick={() => setTab('informe')}>Informe</button>
+          <button className="btn-tema" onClick={() => { const nuevo = !temaOscuro; setTemaOscuro(nuevo); localStorage.setItem('tema', nuevo ? 'oscuro' : 'claro') }}>{temaOscuro ? '☀️' : '🌙'}</button>
           <button className="btn-primary" onClick={() => { setForm({ nombre: '', categoria: 'Nicotina', stock_actual: 0, stock_minimo: 5, precio: 0 }); setModalProducto('nuevo') }}>+ Nuevo producto</button>
         </div>
       </header>
