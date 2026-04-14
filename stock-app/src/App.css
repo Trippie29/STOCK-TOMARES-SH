@@ -292,6 +292,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 }
 
 .tema-claro .logo-main { color: #111111; }
+.tema-claro .logo-sub { color: #2196f3; }
+.tema-claro .realtime-badge { background: rgba(22,163,74,0.1); color: #16a34a; border-color: rgba(22,163,74,0.3); }
+.tema-claro .pulse { background: #16a34a; }
 .tema-claro .tabla tbody tr:hover { background: #f0f0eb; }
 .tema-claro .tabla tbody tr { background: #ffffff; }
 .tema-claro .modal { background: #ffffff; }
