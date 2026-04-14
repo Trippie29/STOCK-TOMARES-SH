@@ -271,6 +271,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 
 /* Tema claro */
 .tema-claro {
+  background: #f5f5f0;
   --bg: #f5f5f0;
   --bg2: #ffffff;
   --bg3: #f0f0eb;
@@ -291,7 +292,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
   --purple-bg: rgba(124,58,237,0.1);
 }
 
-.tema-claro .logo-main { color: #111111; }
+.tema-claro body { background: #f5f5f0 !important; }
+.tema-claro .header { border-bottom-color: rgba(0,0,0,0.1); }
+.tema-claro .logo-main { color: #111111 !important; }
 .tema-claro .logo-sub { color: #2196f3; }
 .tema-claro .realtime-badge { background: rgba(22,163,74,0.1); color: #16a34a; border-color: rgba(22,163,74,0.3); }
 .tema-claro .pulse { background: #16a34a; }
