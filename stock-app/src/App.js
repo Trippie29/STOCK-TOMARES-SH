@@ -287,6 +287,39 @@ function CaducidadesTab({ caducidades, cadBusqueda, setCadBusqueda, cadFiltro, s
 }
 
 export default function App() {
+  const [usuario, setUsuario] = useState(() => sessionStorage.getItem('usuario') || null)
+  const [loginUser, setLoginUser] = useState('')
+  const [loginPass, setLoginPass] = useState('')
+  const [loginError, setLoginError] = useState('')
+
+  const USUARIOS = {
+    'admin': { pass: '0000', rol: 'admin' },
+    'user': { pass: '1975', rol: 'user' }
+  }
+
+  const handleLogin = () => {
+    const u = USUARIOS[loginUser.toLowerCase()]
+    if (u && u.pass === loginPass) {
+      sessionStorage.setItem('usuario', loginUser.toLowerCase())
+      sessionStorage.setItem('rol', u.rol)
+      setUsuario(loginUser.toLowerCase())
+      setLoginError('')
+    } else {
+      setLoginError('Usuario o contraseña incorrectos')
+    }
+  }
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('usuario')
+    sessionStorage.removeItem('rol')
+    setUsuario(null)
+    setLoginUser('')
+    setLoginPass('')
+  }
+
+  const rol = sessionStorage.getItem('rol') || 'user'
+  const esAdmin = rol === 'admin'
+
   const [productos, setProductos] = useState([])
   const [movimientos, setMovimientos] = useState([])
   const [caducidades, setCaducidades] = useState([])
@@ -685,6 +718,38 @@ export default function App() {
     showToast('Eliminado')
   }
 
+  if (!usuario) return (
+    <div className="login-screen">
+      <div className="login-box">
+        <div className="login-logo">
+          <span className="logo-main">SINHUMO</span>
+          <span className="logo-sub">TOMARES STOCK</span>
+        </div>
+        <div className="login-form">
+          <label>Usuario</label>
+          <input
+            type="text"
+            placeholder="admin / user"
+            value={loginUser}
+            onChange={e => setLoginUser(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleLogin()}
+            autoComplete="off"
+          />
+          <label>Contraseña</label>
+          <input
+            type="password"
+            placeholder="••••"
+            value={loginPass}
+            onChange={e => setLoginPass(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleLogin()}
+          />
+          {loginError && <div className="login-error">{loginError}</div>}
+          <button className="btn-primary login-btn" onClick={handleLogin}>Entrar</button>
+        </div>
+      </div>
+    </div>
+  )
+
   if (loading) return <div className="loading-screen"><div className="loading-dot" /><span>Conectando...</span></div>
 
   return (
@@ -700,16 +765,18 @@ export default function App() {
           <div className="realtime-badge"><span className="pulse" />EN VIVO</div>
         </div>
         <div className="header-right">
-          <button className="btn-pdf" onClick={() => { setPdfFile(null); setPdfResultados([]); setPdfPaso(1); setModalVentasPDF(true) }}>PDF Ventas</button>
-          <button className="btn-albaran" onClick={() => { setAlbaranImg(null); setAlbaranPreview(null); setAlbaranResultados([]); setAlbaranPaso(1); setModalAlbaran(true) }}>📦 Stock pedido</button>
-          <button className="btn-fechas" onClick={() => { setFechasImg(null); setFechasPreview(null); setFechasResultados([]); setFechasPaso(1); setModalFechas(true) }}>📅 Fechas pedido</button>
+          {esAdmin && <button className="btn-pdf" onClick={() => { setPdfFile(null); setPdfResultados([]); setPdfPaso(1); setModalVentasPDF(true) }}>PDF Ventas</button>}
+          {esAdmin && <button className="btn-albaran" onClick={() => { setAlbaranImg(null); setAlbaranPreview(null); setAlbaranResultados([]); setAlbaranPaso(1); setModalAlbaran(true) }}>📦 Stock pedido</button>}
+          {esAdmin && <button className="btn-fechas" onClick={() => { setFechasImg(null); setFechasPreview(null); setFechasResultados([]); setFechasPaso(1); setModalFechas(true) }}>📅 Fechas pedido</button>}
           <button className={"btn-tabs" + (tab === 'sinstock' ? ' btn-tab-active' : '')} onClick={() => setTab('sinstock')}>Sin Stock</button>
           <button className={"btn-tabs" + (tab === 'stock' ? ' btn-tab-active' : '')} onClick={() => setTab('stock')}>Stock</button>
           <button className={"btn-cad" + (tab === 'caducidades' ? ' btn-tab-active' : '')} onClick={() => setTab('caducidades')}>Caducidades</button>
           <button className={"btn-tabs" + (tab === 'historial' ? ' btn-tab-active' : '')} onClick={() => setTab('historial')}>Historial</button>
           <button className={"btn-informe" + (tab === 'informe' ? ' btn-tab-active' : '')} onClick={() => setTab('informe')}>Informe</button>
           <button className="btn-tema" onClick={() => { const nuevo = !temaOscuro; setTemaOscuro(nuevo); localStorage.setItem('tema', nuevo ? 'oscuro' : 'claro') }}>{temaOscuro ? '☀️' : '🌙'}</button>
-          <button className="btn-primary" onClick={() => { setForm({ nombre: '', categoria: 'Nicotina', stock_actual: 0, stock_minimo: 5, precio: 0 }); setModalProducto('nuevo') }}>+ Nuevo producto</button>
+          <div className="user-badge">{usuario}</div>
+          <button className="btn-logout" onClick={handleLogout}>Salir</button>
+          {esAdmin && <button className="btn-primary" onClick={() => { setForm({ nombre: '', categoria: 'Nicotina', stock_actual: 0, stock_minimo: 5, precio: 0 }); setModalProducto('nuevo') }}>+ Nuevo producto</button>}
         </div>
       </header>
 
@@ -739,7 +806,7 @@ export default function App() {
                       <td>
                         <div className="acciones">
                           <button className="btn-entrada" onClick={() => { setModalEntrada(p); setEntradaForm({ cantidad: 1, referencia: '' }) }}>+ Entrada</button>
-                          <button className="btn-edit" onClick={() => { setForm({ nombre: p.nombre, categoria: p.categoria, stock_actual: p.stock_actual, stock_minimo: p.stock_minimo, precio: p.precio }); setModalProducto(p) }}>editar</button>
+                          {esAdmin && <button className="btn-edit" onClick={() => { setForm({ nombre: p.nombre, categoria: p.categoria, stock_actual: p.stock_actual, stock_minimo: p.stock_minimo, precio: p.precio }); setModalProducto(p) }}>editar</button>}
                         </div>
                       </td>
                     </tr>
@@ -799,8 +866,8 @@ export default function App() {
                           <div className="acciones">
                             <button className="btn-venta" onClick={() => { setModalVenta(p); setVentaForm({ cantidad: 1, referencia: '' }) }}>- Venta</button>
                             <button className="btn-entrada" onClick={() => { setModalEntrada(p); setEntradaForm({ cantidad: 1, referencia: '' }) }}>+ Entrada</button>
-                            <button className="btn-edit" onClick={() => { setForm({ nombre: p.nombre, categoria: p.categoria, stock_actual: p.stock_actual, stock_minimo: p.stock_minimo, precio: p.precio }); setModalProducto(p) }}>editar</button>
-                            <button className="btn-del" onClick={() => eliminarProducto(p.id)}>x</button>
+                            {esAdmin && <button className="btn-edit" onClick={() => { setForm({ nombre: p.nombre, categoria: p.categoria, stock_actual: p.stock_actual, stock_minimo: p.stock_minimo, precio: p.precio }); setModalProducto(p) }}>editar</button>}
+                            {esAdmin && <button className="btn-del" onClick={() => eliminarProducto(p.id)}>x</button>}
                           </div>
                         </td>
                       </tr>

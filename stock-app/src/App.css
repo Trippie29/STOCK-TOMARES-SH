@@ -312,3 +312,18 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 
 .btn-tema { background: transparent; border: 1px solid var(--border2); border-radius: var(--radius); width: 36px; height: 36px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
 .btn-tema:hover { background: var(--bg3); }
+
+.login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+.login-box { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-lg); padding: 2.5rem; width: 100%; max-width: 360px; }
+.login-logo { text-align: center; margin-bottom: 2rem; }
+.login-logo .logo-main { display: block; font-family: 'DM Sans', sans-serif; font-size: 32px; font-weight: 700; color: var(--text); letter-spacing: 0.12em; }
+.login-logo .logo-sub { display: block; font-family: 'DM Mono', monospace; font-size: 10px; color: #2196f3; letter-spacing: 0.25em; text-transform: uppercase; margin-top: 4px; }
+.login-form { display: flex; flex-direction: column; gap: 6px; }
+.login-form label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; font-family: var(--mono); margin-top: 8px; }
+.login-form input { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; color: var(--text); font-size: 14px; font-family: var(--font); width: 100%; }
+.login-form input:focus { outline: none; border-color: var(--border2); }
+.login-btn { margin-top: 1.25rem; padding: 12px; font-size: 14px; width: 100%; }
+.login-error { color: var(--red); font-size: 12px; font-family: var(--mono); margin-top: 4px; text-align: center; }
+.user-badge { font-size: 11px; font-family: var(--mono); color: var(--text3); padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius); }
+.btn-logout { background: transparent; color: var(--text3); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; font-size: 12px; font-family: var(--font); cursor: pointer; }
+.btn-logout:hover { color: var(--red); border-color: rgba(231,76,60,0.3); }
