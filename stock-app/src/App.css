@@ -327,3 +327,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .user-badge { font-size: 11px; font-family: var(--mono); color: var(--text3); padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius); }
 .btn-logout { background: transparent; color: var(--text3); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; font-size: 12px; font-family: var(--font); cursor: pointer; }
 .btn-logout:hover { color: var(--red); border-color: rgba(231,76,60,0.3); }
+
+.export-btn { background: rgba(139,92,246,0.12) !important; color: #8b5cf6 !important; border-color: rgba(139,92,246,0.3) !important; }
+.export-btn:hover { background: rgba(139,92,246,0.22) !important; }

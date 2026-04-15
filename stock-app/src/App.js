@@ -116,6 +116,7 @@ function InformeTab({ movimientos, productos }) {
           {[['hoy','Hoy'],['semana','Esta semana'],['mes','Este mes']].map(([v,l]) => (
             <button key={v} className={'periodo-btn' + (periodo === v ? ' active' : '')} onClick={() => setPeriodo(v)}>{l}</button>
           ))}
+          <button className="periodo-btn export-btn" onClick={() => exportarInformePDF({ periodo, fechaHoy, totalVendidas, totalEntradas, stockBajo, sinStock, topVentas, topCats, dias7 })}>📄 Exportar PDF</button>
         </div>
       </div>
       <div className="metrics" style={{marginBottom: '1.5rem'}}>
@@ -176,6 +177,124 @@ function InformeTab({ movimientos, productos }) {
     </div>
   )
 }
+
+function exportarInformePDF({ periodo, fechaHoy, totalVendidas, totalEntradas, stockBajo, sinStock, topVentas, topCats, dias7 }) {
+  const periodoLabel = periodo === 'hoy' ? 'Hoy' : periodo === 'semana' ? 'Esta semana' : 'Este mes'
+  const maxDia = Math.max(...dias7.map(d => d.total), 1)
+  const maxVenta = topVentas.length > 0 ? topVentas[0][1] : 1
+  const maxCat = topCats.length > 0 ? topCats[0][1] : 1
+
+  const html = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Arial', sans-serif; background: #fff; color: #111; padding: 40px; }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 2px solid #111; }
+  .logo { font-size: 28px; font-weight: 900; letter-spacing: 0.1em; }
+  .logo-sub { font-size: 10px; color: #2196f3; letter-spacing: 0.3em; text-transform: uppercase; margin-top: 2px; }
+  .fecha { font-size: 11px; color: #666; text-align: right; }
+  .periodo-badge { background: #111; color: #fff; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; margin-top: 6px; display: inline-block; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+  .metric { background: #f5f5f5; border-radius: 8px; padding: 16px; }
+  .metric-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #666; margin-bottom: 6px; }
+  .metric-value { font-size: 28px; font-weight: 700; }
+  .metric-value.red { color: #e74c3c; }
+  .metric-value.amber { color: #f39c12; }
+  .section { margin-bottom: 28px; }
+  .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #666; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #eee; }
+  .graf { display: flex; align-items: flex-end; gap: 8px; height: 120px; margin-bottom: 8px; }
+  .graf-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+  .graf-bar { width: 100%; background: #2196f3; border-radius: 3px 3px 0 0; min-height: 3px; }
+  .graf-label { font-size: 9px; color: #999; margin-top: 4px; text-align: center; }
+  .graf-val { font-size: 9px; color: #333; margin-bottom: 2px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .rank-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+  .rank-num { font-size: 11px; color: #999; min-width: 18px; text-align: right; }
+  .rank-nombre { font-size: 11px; color: #111; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rank-bar-wrap { width: 80px; background: #f0f0f0; border-radius: 2px; height: 4px; }
+  .rank-bar { height: 4px; background: #2196f3; border-radius: 2px; }
+  .rank-bar-cat { background: #fb923c; }
+  .rank-qty { font-size: 11px; color: #666; min-width: 35px; text-align: right; }
+  .empty { font-size: 12px; color: #999; padding: 16px 0; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #eee; font-size: 10px; color: #999; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="logo">SINHUMO</div>
+      <div class="logo-sub">TOMARES STOCK</div>
+    </div>
+    <div class="fecha">
+      <div>${fechaHoy}</div>
+      <div class="periodo-badge">${periodoLabel}</div>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><div class="metric-label">Uds vendidas</div><div class="metric-value">${totalVendidas}</div></div>
+    <div class="metric"><div class="metric-label">Uds recibidas</div><div class="metric-value">${totalEntradas}</div></div>
+    <div class="metric"><div class="metric-label">Stock bajo</div><div class="metric-value amber">${stockBajo}</div></div>
+    <div class="metric"><div class="metric-label">Sin stock</div><div class="metric-value red">${sinStock}</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Ventas por dia (ultimos 7 dias)</div>
+    <div class="graf">
+      ${dias7.map(d => `
+        <div class="graf-col">
+          <div class="graf-val">${d.total > 0 ? d.total : ''}</div>
+          <div class="graf-bar" style="height:${Math.max(3, (d.total / maxDia) * 100)}px"></div>
+          <div class="graf-label">${d.label}</div>
+        </div>
+      `).join('')}
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="section">
+      <div class="section-title">Top productos mas vendidos</div>
+      ${topVentas.length === 0
+        ? '<div class="empty">Sin ventas en este periodo</div>'
+        : topVentas.map(([nombre, qty], i) => `
+          <div class="rank-row">
+            <span class="rank-num">${i + 1}</span>
+            <span class="rank-nombre">${nombre}</span>
+            <div class="rank-bar-wrap"><div class="rank-bar" style="width:${Math.max(4, (qty / maxVenta) * 100)}%"></div></div>
+            <span class="rank-qty">-${qty}</span>
+          </div>
+        `).join('')
+      }
+    </div>
+    <div class="section">
+      <div class="section-title">Ventas por categoria</div>
+      ${topCats.length === 0
+        ? '<div class="empty">Sin ventas en este periodo</div>'
+        : topCats.map(([cat, qty]) => `
+          <div class="rank-row">
+            <span class="rank-nombre">${cat}</span>
+            <div class="rank-bar-wrap"><div class="rank-bar rank-bar-cat" style="width:${Math.max(4, (qty / maxCat) * 100)}%"></div></div>
+            <span class="rank-qty">${qty} uds</span>
+          </div>
+        `).join('')
+      }
+    </div>
+  </div>
+
+  <div class="footer">Sinhumo Tomares Stock — Generado el ${new Date().toLocaleString('es-ES')}</div>
+</body>
+</html>`
+
+  const ventana = window.open('', '_blank')
+  ventana.document.write(html)
+  ventana.document.close()
+  ventana.focus()
+  setTimeout(() => ventana.print(), 500)
+}
+
 function estadoCaducidad(fecha) {
   if (!fecha) return { cls: 'nodate', label: 'Sin fecha', dias: null }
   const hoy = new Date()
