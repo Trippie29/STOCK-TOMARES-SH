@@ -449,7 +449,7 @@ export default function App() {
       })
       const prompt = 'Eres un asistente para una tienda de vapeo en Espana. Analiza esta imagen: puede ser un albaran, factura, lista de pedido o foto de productos/cajas. Extrae TODOS los productos visibles con sus cantidades. Si no hay cantidad visible, pon 1. Responde UNICAMENTE con JSON valido sin texto extra: {"productos": [{"nombre": "nombre completo del producto", "cantidad": numero}]}. Si no puedes identificar productos responde: {"productos": []}. Incluye marca, modelo, sabor, nicotina y cualquier detalle del nombre.'
       const resp = await fetch(
-        'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=' + GEMINI_KEY,
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -524,7 +524,7 @@ export default function App() {
       })
       const prompt = 'Eres un asistente para una tienda de vapeo en Espana. Este es un PDF de ventas del dia. Extrae TODOS los productos vendidos con sus cantidades. El formato suele ser: nombre del producto seguido de la cantidad al final de la linea. Responde UNICAMENTE con JSON valido sin texto extra: {"productos": [{"nombre": "nombre completo del producto", "cantidad": numero}]}. Si no puedes identificar productos responde: {"productos": []}. Incluye todos los detalles del nombre: marca, modelo, sabor, mg, ml, etc.'
       const resp = await fetch(
-        'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=' + GEMINI_KEY,
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -638,7 +638,7 @@ export default function App() {
       const prompt = 'Eres un asistente para una tienda de vapeo en Espana. Analiza este albaran o documento. Extrae TODOS los productos que tengan una fecha de caducidad escrita al lado (puede estar escrita a mano con boligrafo). El formato puede ser DD/MM/AAAA, MM/AAAA o cualquier formato de fecha. Responde UNICAMENTE con JSON valido sin texto extra: {"productos": [{"nombre": "nombre del producto", "fecha": "YYYY-MM-DD"}]}. Si no puedes identificar productos con fechas responde: {"productos": []}. Solo incluye productos que tengan una fecha de caducidad visible.'
 
       const resp = await fetch(
-        'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=' + GEMINI_KEY,
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
