@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from './supabase'
 import './App.css'
 
-const GEMINI_KEY = 'AIzaSyD6oolRMPb5hEAtFHHspvze17BjNyKBop4'
+const GEMINI_KEY = 'AIzaSyA7B8wgd89q65d5hIrWe35kgXJ6H3Yo96s'
 
 const CATEGORIAS_TREE = [
   { nombre: 'Nicotina', sub: [] },
