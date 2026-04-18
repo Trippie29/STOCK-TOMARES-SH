@@ -885,7 +885,7 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
           ignorar: !fechaISO || yaExiste,
           yaExiste
         }
-      }).filter(item => item.fecha) // quitar los que no tienen fecha válida
+      }).filter(item => item.fecha && !item.yaExiste) // quitar sin fecha válida y los que ya existen
 
       setFechasResultados(resultados)
       setFechasPaso(2)
