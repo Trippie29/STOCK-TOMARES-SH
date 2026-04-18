@@ -862,21 +862,23 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
         conPuntuacion.sort((a, b) => b.coincidencias - a.coincidencias)
         const encontrado = conPuntuacion.length > 0 ? conPuntuacion[0].c : null
         // yaExiste: mismo producto Y mismo año+mes (ignoramos el día)
-        const mismoAnioMes = (f1, f2) => {
-          if (!f1 || !f2) return false
-          return f1.slice(0,7) === f2.slice(0,7)
+        // Normaliza cualquier formato de fecha a YYYY-MM para comparar solo año y mes
+        const anioMes = (f) => {
+          if (!f) return null
+          const s = String(f).trim().slice(0, 7) // coge "YYYY-MM" de cualquier formato
+          return s
         }
-        // También comprobamos contra TODAS las fechas del mismo producto en caducidades
-        const todasDelProducto = conPuntuacion.length > 0
-          ? caducidades.filter(c => {
-              const nombreCad = c.nombre.toLowerCase()
-              const coincidencias = palabras.filter(w => nombreCad.includes(w)).length
-              return coincidencias >= 2
-            })
-          : []
-        const yaExiste = fechaISO && todasDelProducto.some(c =>
-          c.fecha_caducidad === fechaISO || mismoAnioMes(c.fecha_caducidad, fechaISO)
-        )
+        const anioMesFechaISO = anioMes(fechaISO)
+        // Comprobamos contra TODAS las entradas del mismo producto en caducidades
+        const todasDelProducto = caducidades.filter(c => {
+          const nombreCad = c.nombre.toLowerCase()
+          const coincidencias = palabras.filter(w => nombreCad.includes(w)).length
+          return coincidencias >= 2
+        })
+        const yaExiste = !!(fechaISO && anioMesFechaISO && todasDelProducto.some(c => {
+          const anioMesCad = anioMes(c.fecha_caducidad)
+          return anioMesCad === anioMesFechaISO
+        }))
         return {
           nombre: item.nombre,
           fecha_raw: item.fecha_raw || item.fecha || '',
