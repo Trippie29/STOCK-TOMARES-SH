@@ -776,12 +776,12 @@ export default function App() {
 
   const parsearFechaAlbaran = (fechaStr) => {
     // Normaliza fechas escritas a mano en albaranes Sinhumo
-    // Formatos posibles: "7/28", "1/29", "12/28" (mes/año) o "15/11/27", "17/07/26" (dia/mes/año)
+    // SIEMPRE devuelve YYYY-MM-01 (ignoramos el día, solo mes y año)
     if (!fechaStr) return null
     const s = fechaStr.trim().replace(/\s/g, '')
     const partes = s.split('/')
     if (partes.length === 2) {
-      // Formato M/AA o MM/AA → primer dia del mes
+      // Formato M/AA → "1/29" = enero 2029
       const mes = parseInt(partes[0])
       const anioCorto = parseInt(partes[1])
       if (isNaN(mes) || isNaN(anioCorto)) return null
@@ -789,14 +789,13 @@ export default function App() {
       if (mes < 1 || mes > 12) return null
       return `${anio}-${String(mes).padStart(2,'0')}-01`
     } else if (partes.length === 3) {
-      // Formato D/M/AA o DD/MM/AA
-      const dia = parseInt(partes[0])
+      // Formato D/M/AA → "15/11/27" = noviembre 2027 (ignoramos el día 15)
       const mes = parseInt(partes[1])
       const anioCorto = parseInt(partes[2])
-      if (isNaN(dia) || isNaN(mes) || isNaN(anioCorto)) return null
+      if (isNaN(mes) || isNaN(anioCorto)) return null
       const anio = anioCorto < 100 ? 2000 + anioCorto : anioCorto
-      if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null
-      return `${anio}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
+      if (mes < 1 || mes > 12) return null
+      return `${anio}-${String(mes).padStart(2,'0')}-01`
     }
     return null
   }
@@ -848,44 +847,50 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
 
       if (items.length === 0) { setFechasResultados([]); setFechasPaso(2); return }
 
-      console.log('Caducidades cargadas:', caducidades.length, caducidades.slice(0,3))
+      // Función para comparar solo año y mes
+      const anioMes = (f) => {
+        if (!f) return null
+        return String(f).trim().slice(0, 7)
+      }
+
       const resultados = items.map(item => {
-        // Convertir fecha_raw a formato YYYY-MM-DD
-        const fechaISO = parsearFechaAlbaran(item.fecha_raw || item.fecha || '')
-        // Buscar si ya existe en caducidades con coincidencia flexible de nombre
-        // Palabras clave: ignorar palabras genéricas, quedarse con las específicas
-        const palabrasGenéricas = new Set(['longfill','minilongfill','opciones','aroma','sales','aromas','10ml','20ml','30ml','24ml','50ml'])
-        const palabras = item.nombre.toLowerCase().split(/[\s\-:,]+/).filter(w => w.length > 3 && !palabrasGenéricas.has(w))
-        const palabrasTodas = item.nombre.toLowerCase().split(/[\s\-:,]+/).filter(w => w.length > 3)
-        
-        const anioMes = (f) => f ? String(f).trim().slice(0, 7) : null
-        const anioMesFechaISO = anioMes(fechaISO)
+        try {
+          const fechaISO = parsearFechaAlbaran(item.fecha_raw || item.fecha || '')
+          if (!fechaISO) return null
 
-        // Buscar coincidencias en caducidades
-        const conPuntuacion = caducidades.map(c => {
-          const nombreCad = c.nombre.toLowerCase()
-          const coincEspecificas = palabras.filter(w => nombreCad.includes(w)).length
-          const coincTodas = palabrasTodas.filter(w => nombreCad.includes(w)).length
-          return { c, puntos: coincEspecificas * 2 + coincTodas }
-        }).filter(x => x.puntos >= 2)
-        conPuntuacion.sort((a, b) => b.puntos - a.puntos)
-        const encontrado = conPuntuacion.length > 0 ? conPuntuacion[0].c : null
+          const anioMesFechaISO = anioMes(fechaISO)
+          const nombreItem = item.nombre.toLowerCase()
 
-        // Comprobar si ya existe con mismo año+mes
-        const todasDelProducto = conPuntuacion.map(x => x.c)
-        const yaExiste = !!(fechaISO && anioMesFechaISO && todasDelProducto.some(c => {
-          const anioMesCad = anioMes(c.fecha_caducidad)
-          return anioMesCad === anioMesFechaISO
-        }))
-        return {
-          nombre: item.nombre,
-          fecha_raw: item.fecha_raw || item.fecha || '',
-          fecha: fechaISO || '',
-          encontrado: encontrado || null,
-          ignorar: !fechaISO || yaExiste,
-          yaExiste
+          // Buscar en caducidades productos con nombre similar
+          // Buscar nombre exacto primero, luego aproximado
+          // Incluimos el tipo (Aroma/Sales) para no confundir productos distintos
+          const GENERICAS = new Set(['longfill','minilongfill','opciones','liquido','liquidos','desechable','by','ice','10ml','20ml','30ml','24ml','50ml','6ml'])
+          const tokens = nombreItem.split(/[\s\-:,()]+/).filter(w => w.length > 3 && !GENERICAS.has(w))
+
+          const candidatos = caducidades.filter(c => {
+            const nc = c.nombre.toLowerCase()
+            // Debe coincidir al menos 2 tokens específicos
+            const coincide = tokens.filter(t => nc.includes(t)).length
+            return coincide >= 2
+          })
+
+          // yaExiste si algún candidato tiene el mismo año+mes (día siempre 01)
+          const yaExiste = candidatos.some(c => anioMes(c.fecha_caducidad) === anioMesFechaISO)
+          const encontrado = candidatos.length > 0 ? candidatos[0] : null
+
+          return {
+            nombre: item.nombre,
+            fecha_raw: item.fecha_raw || item.fecha || '',
+            fecha: fechaISO,
+            encontrado,
+            ignorar: yaExiste,
+            yaExiste
+          }
+        } catch(e) {
+          console.error('Error procesando item:', item, e)
+          return null
         }
-      }).filter(item => item.fecha && !item.yaExiste) // quitar sin fecha válida y los que ya existen
+      }).filter(item => item && item.fecha && !item.yaExiste)
 
       setFechasResultados(resultados)
       setFechasPaso(2)
@@ -1365,7 +1370,7 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
                         }
                       </div>
                       <div className="albaran-item-qty" style={{flexDirection:'column', alignItems:'flex-end', gap:'2px'}}>
-                        {item.fecha_raw && <span style={{fontSize:'10px', color:'var(--text3)', fontFamily:'var(--mono)'}}>leído: {item.fecha_raw}</span>}
+                        {item.fecha_raw && <span style={{fontSize:'12px', fontWeight:'600', color:'var(--blue)', fontFamily:'var(--mono)', background:'rgba(59,130,246,0.12)', padding:'2px 8px', borderRadius:'4px', border:'1px solid rgba(59,130,246,0.25)'}}>📅 {item.fecha_raw}</span>}
                         <input type="date" value={item.fecha || ''} className="qty-small" style={{width: '140px'}}
                           onChange={e => { const c = [...fechasResultados]; c[i] = { ...c[i], fecha: e.target.value, yaExiste: false }; setFechasResultados(c) }} />
                       </div>
