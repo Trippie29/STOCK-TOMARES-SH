@@ -853,29 +853,26 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
         // Convertir fecha_raw a formato YYYY-MM-DD
         const fechaISO = parsearFechaAlbaran(item.fecha_raw || item.fecha || '')
         // Buscar si ya existe en caducidades con coincidencia flexible de nombre
-        const palabras = item.nombre.toLowerCase().split(' ').filter(w => w.length > 3)
-        // Puntuamos cada caducidad por cuántas palabras coinciden
+        // Palabras clave: ignorar palabras genéricas, quedarse con las específicas
+        const palabrasGenéricas = new Set(['longfill','minilongfill','opciones','aroma','sales','aromas','10ml','20ml','30ml','24ml','50ml'])
+        const palabras = item.nombre.toLowerCase().split(/[\s\-:,]+/).filter(w => w.length > 3 && !palabrasGenéricas.has(w))
+        const palabrasTodas = item.nombre.toLowerCase().split(/[\s\-:,]+/).filter(w => w.length > 3)
+        
+        const anioMes = (f) => f ? String(f).trim().slice(0, 7) : null
+        const anioMesFechaISO = anioMes(fechaISO)
+
+        // Buscar coincidencias en caducidades
         const conPuntuacion = caducidades.map(c => {
           const nombreCad = c.nombre.toLowerCase()
-          const coincidencias = palabras.filter(w => nombreCad.includes(w)).length
-          return { c, coincidencias }
-        }).filter(x => x.coincidencias >= 2) // al menos 2 palabras en común
-        conPuntuacion.sort((a, b) => b.coincidencias - a.coincidencias)
+          const coincEspecificas = palabras.filter(w => nombreCad.includes(w)).length
+          const coincTodas = palabrasTodas.filter(w => nombreCad.includes(w)).length
+          return { c, puntos: coincEspecificas * 2 + coincTodas }
+        }).filter(x => x.puntos >= 2)
+        conPuntuacion.sort((a, b) => b.puntos - a.puntos)
         const encontrado = conPuntuacion.length > 0 ? conPuntuacion[0].c : null
-        // yaExiste: mismo producto Y mismo año+mes (ignoramos el día)
-        // Normaliza cualquier formato de fecha a YYYY-MM para comparar solo año y mes
-        const anioMes = (f) => {
-          if (!f) return null
-          const s = String(f).trim().slice(0, 7) // coge "YYYY-MM" de cualquier formato
-          return s
-        }
-        const anioMesFechaISO = anioMes(fechaISO)
-        // Comprobamos contra TODAS las entradas del mismo producto en caducidades
-        const todasDelProducto = caducidades.filter(c => {
-          const nombreCad = c.nombre.toLowerCase()
-          const coincidencias = palabras.filter(w => nombreCad.includes(w)).length
-          return coincidencias >= 2
-        })
+
+        // Comprobar si ya existe con mismo año+mes
+        const todasDelProducto = conPuntuacion.map(x => x.c)
         const yaExiste = !!(fechaISO && anioMesFechaISO && todasDelProducto.some(c => {
           const anioMesCad = anioMes(c.fecha_caducidad)
           return anioMesCad === anioMesFechaISO
