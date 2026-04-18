@@ -853,41 +853,43 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
         return String(f).trim().slice(0, 7)
       }
 
+      // Comparar con caducidades existentes: mismo producto + mismo mes/año = ignorar
+      // Normalizar nombre para comparación flexible
+      const normalizarNombre = (nombre) => {
+        return nombre.toLowerCase()
+          .replace(/opciones\s*:\s*[^\s,]+/gi, '') // quitar "Opciones : 10mg/ml"
+          .replace(/[^a-z0-9\s]/g, ' ')
+          .replace(/(10ml|20ml|30ml|24ml|50ml|6ml|10mg|20mg|0mg|by|the|los|las|opciones|longfill|minilongfill)/g, '')
+          .replace(/\s+/g, ' ').trim()
+      }
+
       const resultados = items.map(item => {
         try {
           const fechaISO = parsearFechaAlbaran(item.fecha_raw || item.fecha || '')
           if (!fechaISO) return null
-
           const anioMesFechaISO = anioMes(fechaISO)
-          const nombreItem = item.nombre.toLowerCase()
+          const nombreNorm = normalizarNombre(item.nombre)
+          const palabrasItem = nombreNorm.split(' ').filter(w => w.length > 3)
 
-          // Buscar en caducidades productos con nombre similar
-          // Buscar nombre exacto primero, luego aproximado
-          // Incluimos el tipo (Aroma/Sales) para no confundir productos distintos
-          const GENERICAS = new Set(['longfill','minilongfill','opciones','liquido','liquidos','desechable','by','ice','10ml','20ml','30ml','24ml','50ml','6ml'])
-          const tokens = nombreItem.split(/[\s\-:,()]+/).filter(w => w.length > 3 && !GENERICAS.has(w))
-
-          const candidatos = caducidades.filter(c => {
-            const nc = c.nombre.toLowerCase()
-            // Debe coincidir al menos 2 tokens específicos
-            const coincide = tokens.filter(t => nc.includes(t)).length
-            return coincide >= 2
+          // Buscar en caducidades mismo producto (mínimo 2 palabras clave en común)
+          const encontrado = caducidades.find(c => {
+            const nombreCadNorm = normalizarNombre(c.nombre)
+            const palabrasCad = nombreCadNorm.split(' ').filter(w => w.length > 3)
+            const comunes = palabrasItem.filter(w => palabrasCad.includes(w)).length
+            return comunes >= 2
           })
 
-          // yaExiste si algún candidato tiene el mismo año+mes (día siempre 01)
-          const yaExiste = candidatos.some(c => anioMes(c.fecha_caducidad) === anioMesFechaISO)
-          const encontrado = candidatos.length > 0 ? candidatos[0] : null
+          const yaExiste = !!(encontrado && anioMes(encontrado.fecha_caducidad) === anioMesFechaISO)
 
           return {
             nombre: item.nombre,
             fecha_raw: item.fecha_raw || item.fecha || '',
             fecha: fechaISO,
-            encontrado,
+            encontrado: encontrado || null,
             ignorar: yaExiste,
             yaExiste
           }
         } catch(e) {
-          console.error('Error procesando item:', item, e)
           return null
         }
       }).filter(item => item && item.fecha && !item.yaExiste)
