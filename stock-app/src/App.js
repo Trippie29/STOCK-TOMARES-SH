@@ -448,8 +448,8 @@ export default function App() {
   const [loginError, setLoginError] = useState('')
 
   const USUARIOS = {
-    'admin': { pass: '0000', rol: 'admin' },
-    'user': { pass: '1975', rol: 'user' }
+    'admin': { pass: '2910', rol: 'admin' },
+    'user': { pass: '1029', rol: 'user' }
   }
 
   const handleLogin = () => {
@@ -851,16 +851,28 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
       const resultados = items.map(item => {
         // Convertir fecha_raw a formato YYYY-MM-DD
         const fechaISO = parsearFechaAlbaran(item.fecha_raw || item.fecha || '')
-        // Buscar si ya existe en caducidades
+        // Buscar si ya existe en caducidades con coincidencia flexible de nombre
         const palabras = item.nombre.toLowerCase().split(' ').filter(w => w.length > 3)
-        const encontrado = caducidades.find(c => palabras.some(w => c.nombre.toLowerCase().includes(w)))
+        // Puntuamos cada caducidad por cuántas palabras coinciden
+        const conPuntuacion = caducidades.map(c => {
+          const nombreCad = c.nombre.toLowerCase()
+          const coincidencias = palabras.filter(w => nombreCad.includes(w)).length
+          return { c, coincidencias }
+        }).filter(x => x.coincidencias >= 2) // al menos 2 palabras en común
+        conPuntuacion.sort((a, b) => b.coincidencias - a.coincidencias)
+        const encontrado = conPuntuacion.length > 0 ? conPuntuacion[0].c : null
+        // yaExiste: mismo producto Y mismo año+mes
+        const yaExiste = encontrado && fechaISO && (
+          encontrado.fecha_caducidad === fechaISO ||
+          (encontrado.fecha_caducidad && encontrado.fecha_caducidad.slice(0,7) === fechaISO.slice(0,7))
+        )
         return {
           nombre: item.nombre,
           fecha_raw: item.fecha_raw || item.fecha || '',
           fecha: fechaISO || '',
           encontrado: encontrado || null,
-          ignorar: !fechaISO, // ignorar si no se pudo parsear la fecha
-          yaExiste: encontrado && fechaISO && encontrado.fecha_caducidad === fechaISO
+          ignorar: !fechaISO || yaExiste, // ignorar si no hay fecha válida o ya existe
+          yaExiste
         }
       }).filter(item => item.fecha) // quitar los que no tienen fecha válida
 
