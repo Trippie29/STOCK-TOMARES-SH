@@ -861,17 +861,28 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
         }).filter(x => x.coincidencias >= 2) // al menos 2 palabras en común
         conPuntuacion.sort((a, b) => b.coincidencias - a.coincidencias)
         const encontrado = conPuntuacion.length > 0 ? conPuntuacion[0].c : null
-        // yaExiste: mismo producto Y mismo año+mes
-        const yaExiste = encontrado && fechaISO && (
-          encontrado.fecha_caducidad === fechaISO ||
-          (encontrado.fecha_caducidad && encontrado.fecha_caducidad.slice(0,7) === fechaISO.slice(0,7))
+        // yaExiste: mismo producto Y mismo año+mes (ignoramos el día)
+        const mismoAnioMes = (f1, f2) => {
+          if (!f1 || !f2) return false
+          return f1.slice(0,7) === f2.slice(0,7)
+        }
+        // También comprobamos contra TODAS las fechas del mismo producto en caducidades
+        const todasDelProducto = conPuntuacion.length > 0
+          ? caducidades.filter(c => {
+              const nombreCad = c.nombre.toLowerCase()
+              const coincidencias = palabras.filter(w => nombreCad.includes(w)).length
+              return coincidencias >= 2
+            })
+          : []
+        const yaExiste = fechaISO && todasDelProducto.some(c =>
+          c.fecha_caducidad === fechaISO || mismoAnioMes(c.fecha_caducidad, fechaISO)
         )
         return {
           nombre: item.nombre,
           fecha_raw: item.fecha_raw || item.fecha || '',
           fecha: fechaISO || '',
           encontrado: encontrado || null,
-          ignorar: !fechaISO || yaExiste, // ignorar si no hay fecha válida o ya existe
+          ignorar: !fechaISO || yaExiste,
           yaExiste
         }
       }).filter(item => item.fecha) // quitar los que no tienen fecha válida
