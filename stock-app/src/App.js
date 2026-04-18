@@ -743,6 +743,33 @@ export default function App() {
     setFechasResultados([])
   }
 
+  const parsearFechaAlbaran = (fechaStr) => {
+    // Normaliza fechas escritas a mano en albaranes Sinhumo
+    // Formatos posibles: "7/28", "1/29", "12/28" (mes/año) o "15/11/27", "17/07/26" (dia/mes/año)
+    if (!fechaStr) return null
+    const s = fechaStr.trim().replace(/\s/g, '')
+    const partes = s.split('/')
+    if (partes.length === 2) {
+      // Formato M/AA o MM/AA → primer dia del mes
+      const mes = parseInt(partes[0])
+      const anioCorto = parseInt(partes[1])
+      if (isNaN(mes) || isNaN(anioCorto)) return null
+      const anio = anioCorto < 100 ? 2000 + anioCorto : anioCorto
+      if (mes < 1 || mes > 12) return null
+      return `${anio}-${String(mes).padStart(2,'0')}-01`
+    } else if (partes.length === 3) {
+      // Formato D/M/AA o DD/MM/AA
+      const dia = parseInt(partes[0])
+      const mes = parseInt(partes[1])
+      const anioCorto = parseInt(partes[2])
+      if (isNaN(dia) || isNaN(mes) || isNaN(anioCorto)) return null
+      const anio = anioCorto < 100 ? 2000 + anioCorto : anioCorto
+      if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null
+      return `${anio}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
+    }
+    return null
+  }
+
   const analizarFechas = async () => {
     if (!fechasImg) return
     setFechasLoading(true)
@@ -754,7 +781,30 @@ export default function App() {
         reader.readAsDataURL(fechasImg)
       })
 
-      const prompt = 'Eres un asistente para una tienda de vapeo en Espana. Analiza este albaran o documento. Extrae TODOS los productos que tengan una fecha de caducidad escrita al lado (puede estar escrita a mano con boligrafo). El formato puede ser DD/MM/AAAA, MM/AAAA o cualquier formato de fecha. Responde UNICAMENTE con JSON valido sin texto extra: {"productos": [{"nombre": "nombre del producto", "fecha": "YYYY-MM-DD"}]}. Si no puedes identificar productos con fechas responde: {"productos": []}. Solo incluye productos que tengan una fecha de caducidad visible.'
+      const prompt = `Eres un asistente para una tienda de vapeo en España. Analiza este albarán de Sinhumo con mucho cuidado.
+
+ESTRUCTURA DEL ALBARÁN:
+- Es una tabla con columnas: UB (primera columna izquierda), Producto, Cant.
+- En la columna UB hay anotaciones escritas a mano con bolígrafo azul/negro
+- Esas anotaciones son fechas de caducidad o una X (sin caducidad)
+
+CÓMO IDENTIFICAR LAS FECHAS:
+- Busca números escritos a mano en la columna izquierda (UB), antes del nombre del producto
+- Formato corto MES/AÑO: "7/28" = julio 2028, "1/29" = enero 2029, "12/28" = diciembre 2028
+- Formato largo DIA/MES/AÑO: "15/11/27" = 15 nov 2027, "17/07/26" = 17 jul 2026, "27/06/27" = 27 jun 2027
+- Si hay una X escrita → NO tiene fecha, ignora ese producto
+- Si hay guión, está en blanco, o no hay nada → ignora ese producto
+
+INSTRUCCIONES:
+1. Recorre cada fila de la tabla de arriba a abajo
+2. Para cada fila, mira si la columna UB tiene una fecha escrita a mano (números con barras /)
+3. Si tiene fecha, anota el nombre completo del producto de esa misma fila y la fecha tal como está escrita
+4. La fecha devuélvela EXACTAMENTE como aparece escrita (ej: "7/28", "15/11/27"), yo la convertiré
+
+Responde ÚNICAMENTE con este JSON válido sin texto adicional, sin markdown, sin explicaciones:
+{"productos": [{"nombre": "nombre completo del producto", "fecha_raw": "fecha tal como está escrita"}]}
+
+Si no hay ningún producto con fecha escrita responde exactamente: {"productos": []}`
 
       const resp = await fetch(
         'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY,
@@ -763,42 +813,39 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: fechasImg.type || 'image/jpeg', data: base64 } }] }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
+            generationConfig: { temperature: 0.05, maxOutputTokens: 3000 }
           })
         }
       )
 
       const data = await resp.json()
       if (data.error) throw new Error(data.error.message || 'API error')
-      const texto = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] ? data.candidates[0].content.parts[0].text : ''
+      const texto = data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
       if (!texto) throw new Error('La IA no devolvio respuesta')
+
       const jsonMatch = texto.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
-        // No products with dates found
-        setFechasResultados([])
-        setFechasPaso(2)
-        return
-      }
+      if (!jsonMatch) { setFechasResultados([]); setFechasPaso(2); return }
+
       const parsed = JSON.parse(jsonMatch[0])
       const items = parsed.productos || []
 
-      if (items.length === 0) {
-        setFechasResultados([])
-        setFechasPaso(2)
-        return
-      }
+      if (items.length === 0) { setFechasResultados([]); setFechasPaso(2); return }
 
       const resultados = items.map(item => {
+        // Convertir fecha_raw a formato YYYY-MM-DD
+        const fechaISO = parsearFechaAlbaran(item.fecha_raw || item.fecha || '')
+        // Buscar si ya existe en caducidades
         const palabras = item.nombre.toLowerCase().split(' ').filter(w => w.length > 3)
         const encontrado = caducidades.find(c => palabras.some(w => c.nombre.toLowerCase().includes(w)))
         return {
           nombre: item.nombre,
-          fecha: item.fecha,
+          fecha_raw: item.fecha_raw || item.fecha || '',
+          fecha: fechaISO || '',
           encontrado: encontrado || null,
-          ignorar: false,
-          yaExiste: encontrado && encontrado.fecha_caducidad === item.fecha
+          ignorar: !fechaISO, // ignorar si no se pudo parsear la fecha
+          yaExiste: encontrado && fechaISO && encontrado.fecha_caducidad === fechaISO
         }
-      })
+      }).filter(item => item.fecha) // quitar los que no tienen fecha válida
 
       setFechasResultados(resultados)
       setFechasPaso(2)
@@ -1259,9 +1306,10 @@ export default function App() {
             </>)}
 
             {fechasPaso === 2 && (<>
-              <div className="albaran-resumen">
-                La IA encontro <strong>{fechasResultados.length} productos con fecha</strong>. Revisa antes de guardar:
-              </div>
+              {fechasResultados.length === 0
+                ? <div className="albaran-resumen" style={{color:'var(--amber)'}}>⚠️ La IA no encontró ningún producto con fecha de caducidad en esta imagen. Asegúrate de que se vean bien las anotaciones escritas a mano.</div>
+                : <div className="albaran-resumen">La IA encontró <strong>{fechasResultados.length} productos con fecha</strong>. Revisa y corrige si hace falta:</div>
+              }
               <div className="albaran-lista">
                 {fechasResultados.map((item, i) => (
                   <div key={i} className={'albaran-item' + (item.ignorar ? ' ignorado' : '')}>
@@ -1275,9 +1323,9 @@ export default function App() {
                             : <span className="badge badge-new">Nuevo</span>
                         }
                       </div>
-                      <div className="albaran-item-qty">
-                        <label>Fecha</label>
-                        <input type="date" value={item.fecha || ''} className="qty-small" style={{width: '130px'}}
+                      <div className="albaran-item-qty" style={{flexDirection:'column', alignItems:'flex-end', gap:'2px'}}>
+                        {item.fecha_raw && <span style={{fontSize:'10px', color:'var(--text3)', fontFamily:'var(--mono)'}}>leído: {item.fecha_raw}</span>}
+                        <input type="date" value={item.fecha || ''} className="qty-small" style={{width: '140px'}}
                           onChange={e => { const c = [...fechasResultados]; c[i] = { ...c[i], fecha: e.target.value, yaExiste: false }; setFechasResultados(c) }} />
                       </div>
                       <button className={'btn-ignorar' + (item.ignorar ? ' btn-ignorar-on' : '')}
@@ -1287,15 +1335,15 @@ export default function App() {
                     </div>
                     {item.yaExiste && !item.ignorar && (
                       <div className="pdf-stock-preview" style={{color: 'var(--amber)'}}>
-                        Esta fecha ya existe en caducidades — no se duplicara
+                        Esta fecha ya existe en caducidades — no se duplicará
                       </div>
                     )}
                   </div>
                 ))}
               </div>
               <div className="modal-footer">
-                <button className="btn-cancel" onClick={() => setFechasPaso(1)}>Volver</button>
-                <button className="btn-primary" onClick={confirmarFechas} disabled={fechasLoading}>
+                <button className="btn-cancel" onClick={() => setFechasPaso(1)}>Volver a analizar</button>
+                <button className="btn-primary" onClick={confirmarFechas} disabled={fechasLoading || fechasResultados.filter(r => !r.ignorar && !r.yaExiste).length === 0}>
                   {fechasLoading ? 'Guardando...' : 'Guardar ' + fechasResultados.filter(r => !r.ignorar && !r.yaExiste).length + ' fechas nuevas'}
                 </button>
               </div>
