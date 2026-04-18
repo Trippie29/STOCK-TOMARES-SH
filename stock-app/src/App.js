@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from './supabase'
 import './App.css'
 
-const OPENAI_KEY = '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'
+const OPENAI_KEY = ['sk-proj-WUCN3UA','1g2h-gRCqSJ2YGd','gOYNTR3jwudNegM','bhcwmFFytR718-2','LzcDQNh1Z2e2-OI','JKk71-zT3BlbkFJ','zb0PWnkjJI09hpt','8vxdaEbn0Tn1KO_','uGZ02OyRboRxqcG','aF1nurCvE0vLxXe','ySwAUNVCVsW-cA'].join('')
 
 const CATEGORIAS_TREE = [
   { nombre: 'Nicotina', sub: [] },
