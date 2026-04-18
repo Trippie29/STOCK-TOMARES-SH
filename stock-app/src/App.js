@@ -307,8 +307,24 @@ function estadoCaducidad(fecha) {
   return { cls: 'ok', label: 'Correcto', dias }
 }
 
-function CaducidadesTab({ caducidades, cadBusqueda, setCadBusqueda, cadFiltro, setCadFiltro, supabase, showToast }) {
+function CaducidadesTab({ caducidades, cadBusqueda, setCadBusqueda, cadFiltro, setCadFiltro, supabase, showToast, esAdmin }) {
   const [cadFabricante, setCadFabricante] = React.useState('Todos')
+  const [editando, setEditando] = React.useState(null)
+  const [editFecha, setEditFecha] = React.useState('')
+
+  const guardarEdicion = async () => {
+    if (!editando) return
+    const { error } = await supabase.from('caducidades').update({ fecha_caducidad: editFecha || null }).eq('id', editando.id)
+    if (error) { showToast('Error al guardar', 'error'); return }
+    showToast('Fecha actualizada')
+    setEditando(null)
+  }
+
+  const eliminarCaducidad = async (id) => {
+    if (!window.confirm('¿Eliminar este registro de caducidad?')) return
+    await supabase.from('caducidades').delete().eq('id', id)
+    showToast('Registro eliminado')
+  }
 
   const filtros = [
     { value: 'todos', label: 'Todos' },
@@ -378,22 +394,42 @@ function CaducidadesTab({ caducidades, cadBusqueda, setCadBusqueda, cadFiltro, s
               <th>Fecha caducidad</th>
               <th>Dias restantes</th>
               <th>Estado</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {filtrados.length === 0
-              ? <tr><td colSpan="5" className="empty">No hay productos que coincidan</td></tr>
+              ? <tr><td colSpan="6" className="empty">No hay productos que coincidan</td></tr>
               : filtrados.map(c => {
                 const est = estadoCaducidad(c.fecha_caducidad)
                 return (
                   <tr key={c.id} className={est.cls === 'caducado' ? 'row-out' : est.cls === 'muypronto' || est.cls === 'pronto' ? 'row-low' : ''}>
                     <td className="td-nombre">{c.nombre}</td>
                     <td className="td-cat">{c.categoria}</td>
-                    <td className="td-time">{c.fecha_caducidad ? new Date(c.fecha_caducidad).toLocaleDateString('es-ES') : 'Sin fecha'}</td>
+                    <td className="td-time">
+                      {editando && editando.id === c.id
+                        ? <input type="date" value={editFecha} onChange={e => setEditFecha(e.target.value)} className="qty-small" style={{width:'140px'}} autoFocus />
+                        : (c.fecha_caducidad ? new Date(c.fecha_caducidad).toLocaleDateString('es-ES') : 'Sin fecha')
+                      }
+                    </td>
                     <td className={'td-stock stock-' + (est.cls === 'caducado' ? 'out' : est.cls === 'muypronto' || est.cls === 'pronto' ? 'low' : 'ok')}>
                       {est.dias !== null ? (est.dias < 0 ? est.dias + ' dias' : '+' + est.dias + ' dias') : '-'}
                     </td>
                     <td><span className={'badge badge-cad-' + est.cls}>{est.label}</span></td>
+                    <td>
+                      <div className="acciones">
+                        {editando && editando.id === c.id
+                          ? <>
+                              <button className="btn-entrada" onClick={guardarEdicion}>Guardar</button>
+                              <button className="btn-cancel" style={{padding:'4px 8px',fontSize:'11px'}} onClick={() => setEditando(null)}>Cancelar</button>
+                            </>
+                          : <>
+                              <button className="btn-edit" title="Editar fecha" onClick={() => { setEditando(c); setEditFecha(c.fecha_caducidad || '') }}>✏️</button>
+                              {esAdmin && <button className="btn-del" title="Eliminar" onClick={() => eliminarCaducidad(c.id)}>x</button>}
+                            </>
+                        }
+                      </div>
+                    </td>
                   </tr>
                 )
               })
@@ -1036,6 +1072,7 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
           setCadFiltro={setCadFiltro}
           supabase={supabase}
           showToast={showToast}
+          esAdmin={esAdmin}
         />
       ) : (
         <div className="historial">
