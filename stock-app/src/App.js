@@ -226,7 +226,7 @@ function exportarInformePDF({ periodo, fechaHoy, totalVendidas, totalEntradas, s
   <div class="header">
     <div>
       <div class="logo">SINHUMO</div>
-      <div class="logo-sub">TOMARES STOCK</div>
+      <div class="logo-sub">GINES STOCK</div>
     </div>
     <div class="fecha">
       <div>${fechaHoy}</div>
@@ -284,7 +284,7 @@ function exportarInformePDF({ periodo, fechaHoy, totalVendidas, totalEntradas, s
     </div>
   </div>
 
-  <div class="footer">Sinhumo Tomares Stock — Generado el ${new Date().toLocaleString('es-ES')}</div>
+  <div class="footer">Sinhumo Gines Stock — Generado el ${new Date().toLocaleString('es-ES')}</div>
 </body>
 </html>`
 
@@ -842,7 +842,7 @@ export default function App() {
       <div className="login-box">
         <div className="login-logo">
           <span className="logo-main">SINHUMO</span>
-          <span className="logo-sub">TOMARES STOCK</span>
+          <span className="logo-sub">GINES STOCK</span>
         </div>
         <div className="login-form">
           <label>Usuario</label>
@@ -879,7 +879,7 @@ export default function App() {
         <div className="header-left">
           <div className="logo">
             <span className="logo-main">SINHUMO</span>
-            <span className="logo-sub">TOMARES STOCK</span>
+            <span className="logo-sub">GINES STOCK</span>
           </div>
           <div className="realtime-badge"><span className="pulse" />EN VIVO</div>
         </div>
