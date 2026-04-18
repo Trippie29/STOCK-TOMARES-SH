@@ -848,6 +848,7 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
 
       if (items.length === 0) { setFechasResultados([]); setFechasPaso(2); return }
 
+      console.log('Caducidades cargadas:', caducidades.length, caducidades.slice(0,3))
       const resultados = items.map(item => {
         // Convertir fecha_raw a formato YYYY-MM-DD
         const fechaISO = parsearFechaAlbaran(item.fecha_raw || item.fecha || '')
