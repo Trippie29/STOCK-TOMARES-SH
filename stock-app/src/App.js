@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from './supabase'
 import './App.css'
 
-const GEMINI_KEY = 'AIzaSyDaUoXPP8ZlkrtC0oIlVmKYFSgAgeehHPU'
+const OPENAI_KEY = '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'
 
 const CATEGORIAS_TREE = [
   { nombre: 'Nicotina', sub: [] },
@@ -556,6 +556,25 @@ export default function App() {
     setAlbaranResultados([])
   }
 
+  const callOpenAI = async (prompt, base64, mimeType) => {
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENAI_KEY },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 3000,
+        temperature: 0.05,
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } }
+        ]}]
+      })
+    })
+    const data = await resp.json()
+    if (data.error) throw new Error(data.error.message || 'OpenAI error')
+    return data.choices?.[0]?.message?.content || ''
+  }
+
   const analizarAlbaran = async () => {
     if (!albaranImg) return
     setAlbaranLoading(true)
@@ -567,19 +586,7 @@ export default function App() {
         reader.readAsDataURL(albaranImg)
       })
       const prompt = 'Eres un asistente para una tienda de vapeo en Espana. Analiza esta imagen: puede ser un albaran, factura, lista de pedido o foto de productos/cajas. Extrae TODOS los productos visibles con sus cantidades. Si no hay cantidad visible, pon 1. Responde UNICAMENTE con JSON valido sin texto extra: {"productos": [{"nombre": "nombre completo del producto", "cantidad": numero}]}. Si no puedes identificar productos responde: {"productos": []}. Incluye marca, modelo, sabor, nicotina y cualquier detalle del nombre.'
-      const resp = await fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: albaranImg.type || 'image/jpeg', data: base64 } }] }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
-          })
-        }
-      )
-      const data = await resp.json()
-      const texto = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] ? data.candidates[0].content.parts[0].text : ''
+      const texto = await callOpenAI(prompt, base64, albaranImg.type || 'image/jpeg')
       const jsonMatch = texto.match(/\{[\s\S]*\}/)
       if (!jsonMatch) throw new Error('Sin respuesta')
       const parsed = JSON.parse(jsonMatch[0])
@@ -642,19 +649,7 @@ export default function App() {
         reader.readAsDataURL(pdfFile)
       })
       const prompt = 'Eres un asistente para una tienda de vapeo en Espana. Este es un PDF de ventas del dia. Extrae TODOS los productos vendidos con sus cantidades. El formato suele ser: nombre del producto seguido de la cantidad al final de la linea. Responde UNICAMENTE con JSON valido sin texto extra: {"productos": [{"nombre": "nombre completo del producto", "cantidad": numero}]}. Si no puedes identificar productos responde: {"productos": []}. Incluye todos los detalles del nombre: marca, modelo, sabor, mg, ml, etc.'
-      const resp = await fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'application/pdf', data: base64 } }] }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
-          })
-        }
-      )
-      const data = await resp.json()
-      const texto = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] ? data.candidates[0].content.parts[0].text : ''
+      const texto = await callOpenAI(prompt, base64, 'image/jpeg')
       const jsonMatch = texto.match(/\{[\s\S]*\}/)
       if (!jsonMatch) throw new Error('Sin respuesta')
       const parsed = JSON.parse(jsonMatch[0])
@@ -806,21 +801,7 @@ Responde ÚNICAMENTE con este JSON válido sin texto adicional, sin markdown, si
 
 Si no hay ningún producto con fecha escrita responde exactamente: {"productos": []}`
 
-      const resp = await fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: fechasImg.type || 'image/jpeg', data: base64 } }] }],
-            generationConfig: { temperature: 0.05, maxOutputTokens: 3000 }
-          })
-        }
-      )
-
-      const data = await resp.json()
-      if (data.error) throw new Error(data.error.message || 'API error')
-      const texto = data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      const texto = await callOpenAI(prompt, base64, fechasImg.type || 'image/jpeg')
       if (!texto) throw new Error('La IA no devolvio respuesta')
 
       const jsonMatch = texto.match(/\{[\s\S]*\}/)
