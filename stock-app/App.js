@@ -776,12 +776,12 @@ export default function App() {
 
   const parsearFechaAlbaran = (fechaStr) => {
     // Normaliza fechas escritas a mano en albaranes Sinhumo
-    // Formatos posibles: "7/28", "1/29", "12/28" (mes/año) o "15/11/27", "17/07/26" (dia/mes/año)
+    // SIEMPRE devuelve YYYY-MM-01 (ignoramos el día, solo mes y año)
     if (!fechaStr) return null
     const s = fechaStr.trim().replace(/\s/g, '')
     const partes = s.split('/')
     if (partes.length === 2) {
-      // Formato M/AA o MM/AA → primer dia del mes
+      // Formato M/AA → "1/29" = enero 2029
       const mes = parseInt(partes[0])
       const anioCorto = parseInt(partes[1])
       if (isNaN(mes) || isNaN(anioCorto)) return null
@@ -789,14 +789,13 @@ export default function App() {
       if (mes < 1 || mes > 12) return null
       return `${anio}-${String(mes).padStart(2,'0')}-01`
     } else if (partes.length === 3) {
-      // Formato D/M/AA o DD/MM/AA
-      const dia = parseInt(partes[0])
+      // Formato D/M/AA → "15/11/27" = noviembre 2027 (ignoramos el día 15)
       const mes = parseInt(partes[1])
       const anioCorto = parseInt(partes[2])
-      if (isNaN(dia) || isNaN(mes) || isNaN(anioCorto)) return null
+      if (isNaN(mes) || isNaN(anioCorto)) return null
       const anio = anioCorto < 100 ? 2000 + anioCorto : anioCorto
-      if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null
-      return `${anio}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
+      if (mes < 1 || mes > 12) return null
+      return `${anio}-${String(mes).padStart(2,'0')}-01`
     }
     return null
   }
@@ -812,30 +811,37 @@ export default function App() {
         reader.readAsDataURL(fechasImg)
       })
 
-      const prompt = `Eres un asistente para una tienda de vapeo en España. Analiza este albarán de Sinhumo con mucho cuidado.
+      // Preparar lista de caducidades para la IA
+      const listaCaducidades = caducidades.slice(0, 300).map(c => ({
+        id: c.id,
+        nombre: c.nombre,
+        fecha: c.fecha_caducidad ? c.fecha_caducidad.slice(0,7) : null
+      }))
+
+      const prompt = `Eres un asistente para una tienda de vapeo en España. Analiza este albarán de Sinhumo.
 
 ESTRUCTURA DEL ALBARÁN:
-- Es una tabla con columnas: UB (primera columna izquierda), Producto, Cant.
-- En la columna UB hay anotaciones escritas a mano con bolígrafo azul/negro
-- Esas anotaciones son fechas de caducidad o una X (sin caducidad)
+- Tabla con columnas: UB (primera columna izquierda), Producto, Cant.
+- En la columna UB hay fechas escritas a mano (números con barras /) o nada
 
-CÓMO IDENTIFICAR LAS FECHAS:
-- Busca números escritos a mano en la columna izquierda (UB), antes del nombre del producto
-- Formato corto MES/AÑO: "7/28" = julio 2028, "1/29" = enero 2029, "12/28" = diciembre 2028
-- Formato largo DIA/MES/AÑO: "15/11/27" = 15 nov 2027, "17/07/26" = 17 jul 2026, "27/06/27" = 27 jun 2027
-- Si hay una X escrita → NO tiene fecha, ignora ese producto
-- Si hay guión, está en blanco, o no hay nada → ignora ese producto
+CÓMO LEER LAS FECHAS:
+- Formato MES/AÑO: "1/29"=2029-01, "12/28"=2028-12, "7/28"=2028-07
+- Formato DIA/MES/AÑO: "15/11/27"=2027-11, "17/07/26"=2026-07
+- Si no hay fecha → ignora ese producto
 
-INSTRUCCIONES:
-1. Recorre cada fila de la tabla de arriba a abajo
-2. Para cada fila, mira si la columna UB tiene una fecha escrita a mano (números con barras /)
-3. Si tiene fecha, anota el nombre completo del producto de esa misma fila y la fecha tal como está escrita
-4. La fecha devuélvela EXACTAMENTE como aparece escrita (ej: "7/28", "15/11/27"), yo la convertiré
+PRODUCTOS YA EN CADUCIDADES (id, nombre, fecha YYYY-MM):
+${JSON.stringify(listaCaducidades)}
 
-Responde ÚNICAMENTE con este JSON válido sin texto adicional, sin markdown, sin explicaciones:
-{"productos": [{"nombre": "nombre completo del producto", "fecha_raw": "fecha tal como está escrita"}]}
+Para cada producto del albarán con fecha:
+1. Busca si existe en la lista anterior por nombre similar
+2. Si existe Y misma fecha (año-mes) → accion "ignorar"  
+3. Si existe Y fecha diferente → accion "actualizar", pon su id en id_existente
+4. Si no existe → accion "crear"
 
-Si no hay ningún producto con fecha escrita responde exactamente: {"productos": []}`
+Responde SOLO con JSON válido sin texto extra:
+{"productos": [{"nombre": "nombre completo", "fecha_raw": "fecha escrita", "accion": "crear|actualizar|ignorar", "id_existente": null}]}
+
+Si no hay productos con fecha: {"productos": []}` 
 
       const texto = await callOpenAI(prompt, base64, fechasImg.type || 'image/jpeg')
       if (!texto) throw new Error('La IA no devolvio respuesta')
@@ -848,45 +854,31 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
 
       if (items.length === 0) { setFechasResultados([]); setFechasPaso(2); return }
 
-      console.log('Caducidades cargadas:', caducidades.length)
-      const resultados = items.map(item => {
-        // Convertir fecha_raw a formato YYYY-MM-DD
-        const fechaISO = parsearFechaAlbaran(item.fecha_raw || item.fecha || '')
-        // Buscar si ya existe en caducidades con coincidencia flexible de nombre
-        // Palabras clave: ignorar palabras genéricas, quedarse con las específicas
-        const palabrasGenéricas = new Set(['longfill','minilongfill','opciones','aroma','sales','aromas','10ml','20ml','30ml','24ml','50ml'])
-        const palabras = item.nombre.toLowerCase().split(/[\s\-:,]+/).filter(w => w.length > 3 && !palabrasGenéricas.has(w))
-        const palabrasTodas = item.nombre.toLowerCase().split(/[\s\-:,]+/).filter(w => w.length > 3)
-        
-        const anioMes = (f) => f ? String(f).trim().slice(0, 7) : null
-        const anioMesFechaISO = anioMes(fechaISO)
+      // Función para comparar solo año y mes
+      const anioMes = (f) => {
+        if (!f) return null
+        return String(f).trim().slice(0, 7)
+      }
 
-        // Buscar coincidencias en caducidades
-        const conPuntuacion = caducidades.map(c => {
-          const nombreCad = c.nombre.toLowerCase()
-          const coincEspecificas = palabras.filter(w => nombreCad.includes(w)).length
-          const coincTodas = palabrasTodas.filter(w => nombreCad.includes(w)).length
-          return { c, puntos: coincEspecificas * 2 + coincTodas }
-        }).filter(x => x.puntos >= 2)
-        conPuntuacion.sort((a, b) => b.puntos - a.puntos)
-        const encontrado = conPuntuacion.length > 0 ? conPuntuacion[0].c : null
-
-        // Comprobar si ya existe con mismo año+mes
-        const todasDelProducto = conPuntuacion.map(x => x.c)
-        const yaExiste = !!(fechaISO && anioMesFechaISO && todasDelProducto.some(c => {
-          const anioMesCad = anioMes(c.fecha_caducidad)
-          return anioMesCad === anioMesFechaISO
-        }))
-        console.log(`${item.nombre} | fechaISO: ${fechaISO} | anioMes: ${anioMesFechaISO} | encontrados: ${todasDelProducto.length} | yaExiste: ${yaExiste}`, todasDelProducto.map(c => c.fecha_caducidad))
-        return {
-          nombre: item.nombre,
-          fecha_raw: item.fecha_raw || item.fecha || '',
-          fecha: fechaISO || '',
-          encontrado: encontrado || null,
-          ignorar: !fechaISO || yaExiste,
-          yaExiste
-        }
-      }).filter(item => item.fecha && !item.yaExiste) // quitar sin fecha válida y los que ya existen
+      const resultados = items
+        .filter(item => item.accion !== 'ignorar') // ignorar los que ya tienen la misma fecha
+        .map(item => {
+          try {
+            const fechaISO = parsearFechaAlbaran(item.fecha_raw || item.fecha || '')
+            if (!fechaISO) return null
+            const existente = item.id_existente ? caducidades.find(c => c.id === item.id_existente) : null
+            return {
+              nombre: item.nombre,
+              fecha_raw: item.fecha_raw || item.fecha || '',
+              fecha: fechaISO,
+              accion: item.accion || 'crear', // 'crear' o 'actualizar'
+              id_existente: item.id_existente || null,
+              encontrado: existente || null,
+              ignorar: false,
+              yaExiste: false
+            }
+          } catch(e) { return null }
+        }).filter(item => item && item.fecha)
 
       setFechasResultados(resultados)
       setFechasPaso(2)
@@ -897,22 +889,69 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
     setFechasLoading(false)
   }
 
+  const generarNombreClave = (nombre) => {
+    // Genera una clave única y estable para cada producto
+    // Quita palabras genéricas y deja solo lo esencial
+    return nombre.toLowerCase()
+      .replace(/opciones\b.{0,30}/gi, '')
+      .replace(/[^a-z0-9]/g, ' ')
+      .replace(/ +/g, ' ')
+      .trim()
+      .split(' ')
+      .filter(w => w.length > 2)
+      .sort() // ordenar para que "Aroma Viper" y "Viper Aroma" den la misma clave
+      .join('_')
+  }
+
   const confirmarFechas = async () => {
     setFechasLoading(true)
-    let ok = 0
-    let repetidas = 0
+    let creados = 0
+    let ignorados = 0
+    let actualizados = 0
+
     for (const item of fechasResultados) {
-      if (item.ignorar || item.yaExiste) { if (item.yaExiste) repetidas++; continue }
-      const { error } = await supabase.from('caducidades').insert([{
-        nombre: item.nombre,
-        categoria: item.encontrado ? item.encontrado.categoria : 'Otros',
-        fecha_caducidad: item.fecha,
-        hoja_origen: 'Albaran escaneado'
-      }])
-      if (!error) ok++
+      if (item.ignorar) continue
+
+      const nombreClave = generarNombreClave(item.nombre)
+      if (!nombreClave) continue
+
+      // Buscar por nombre_clave exacto en Supabase
+      const { data: existentes } = await supabase
+        .from('caducidades')
+        .select('id, nombre, fecha_caducidad, nombre_clave')
+        .eq('nombre_clave', nombreClave)
+        .limit(1)
+
+      if (existentes && existentes.length > 0) {
+        const match = existentes[0]
+        const anioMesExistente = match.fecha_caducidad ? match.fecha_caducidad.slice(0, 7) : null
+        const anioMesItem = item.fecha.slice(0, 7)
+        if (anioMesExistente === anioMesItem) {
+          ignorados++
+        } else {
+          await supabase.from('caducidades')
+            .update({ fecha_caducidad: item.fecha })
+            .eq('id', match.id)
+          actualizados++
+        }
+      } else {
+        // No existe → crear con nombre_clave
+        const { error } = await supabase.from('caducidades').insert([{
+          nombre: item.nombre,
+          nombre_clave: nombreClave,
+          categoria: 'Otros',
+          fecha_caducidad: item.fecha,
+          hoja_origen: 'Albaran escaneado'
+        }])
+        if (!error) creados++
+      }
     }
-    let msg = ok + ' fechas nuevas anadidas'
-    if (repetidas > 0) msg += ' - ' + repetidas + ' ya existian (no duplicadas)'
+
+    let msg = ''
+    if (creados > 0) msg += creados + ' nuevas'
+    if (actualizados > 0) msg += (msg ? ' · ' : '') + actualizados + ' actualizadas'
+    if (ignorados > 0) msg += (msg ? ' · ' : '') + ignorados + ' ya existian'
+    if (!msg) msg = 'Sin cambios'
     showToast(msg)
     setModalFechas(false)
     setFechasImg(null); setFechasPreview(null); setFechasResultados([]); setFechasPaso(1)
@@ -1358,11 +1397,9 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
                     <div className="albaran-item-top">
                       <div className="albaran-item-nombre">
                         <span className="albaran-nombre-txt">{item.nombre}</span>
-                        {item.yaExiste
-                          ? <span className="badge badge-warn">Ya existe</span>
-                          : item.encontrado
-                            ? <span className="badge badge-ok">En caducidades</span>
-                            : <span className="badge badge-new">Nuevo</span>
+                        {item.accion === 'actualizar'
+                          ? <span className="badge badge-warn">🔄 Actualizar fecha</span>
+                          : <span className="badge badge-new">✨ Nuevo</span>
                         }
                       </div>
                       <div className="albaran-item-qty" style={{flexDirection:'column', alignItems:'flex-end', gap:'2px'}}>
@@ -1386,7 +1423,10 @@ Si no hay ningún producto con fecha escrita responde exactamente: {"productos":
               <div className="modal-footer">
                 <button className="btn-cancel" onClick={() => setFechasPaso(1)}>Volver a analizar</button>
                 <button className="btn-primary" onClick={confirmarFechas} disabled={fechasLoading || fechasResultados.filter(r => !r.ignorar && !r.yaExiste).length === 0}>
-                  {fechasLoading ? 'Guardando...' : 'Guardar ' + fechasResultados.filter(r => !r.ignorar && !r.yaExiste).length + ' fechas nuevas'}
+                  {fechasLoading ? 'Guardando...' : 
+                    'Guardar ' + fechasResultados.filter(r => !r.ignorar && r.accion === 'crear').length + ' nuevas · ' +
+                    'Actualizar ' + fechasResultados.filter(r => !r.ignorar && r.accion === 'actualizar').length
+                  }
                 </button>
               </div>
             </>)}
