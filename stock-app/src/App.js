@@ -891,10 +891,9 @@ Si no hay productos con fecha: {"productos": []}`
 
   const normalizarNombreCad = (nombre) => {
     return nombre.toLowerCase()
-      .replace(/\s*-?\s*opciones\s*:?\s*[^\-
-]*/gi, '') // quitar solo "- Opciones : X mg/ml"
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .replace(/\s+/g, ' ').trim()
+      .replace(/opciones[^a-z]*/gi, '') // quitar "Opciones : X mg/ml"
+      .replace(/[^a-z0-9]/g, ' ')
+      .replace(/ +/g, ' ').trim()
   }
 
   const confirmarFechas = async () => {
