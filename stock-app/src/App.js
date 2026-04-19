@@ -889,20 +889,6 @@ Si no hay productos con fecha: {"productos": []}`
     setFechasLoading(false)
   }
 
-  const generarNombreClave = (nombre) => {
-    // Genera una clave única y estable para cada producto
-    // Quita palabras genéricas y deja solo lo esencial
-    return nombre.toLowerCase()
-      .replace(/opciones/gi, '')
-      .replace(/[^a-z0-9]/g, ' ')
-      .replace(/ +/g, ' ')
-      .trim()
-      .split(' ')
-      .filter(w => w.length > 2)
-      .sort() // ordenar para que "Aroma Viper" y "Viper Aroma" den la misma clave
-      .join('_')
-  }
-
   const confirmarFechas = async () => {
     setFechasLoading(true)
     let creados = 0
@@ -912,39 +898,75 @@ Si no hay productos con fecha: {"productos": []}`
     for (const item of fechasResultados) {
       if (item.ignorar) continue
 
-      const nombreClave = generarNombreClave(item.nombre)
-      if (!nombreClave) continue
+      const anioMesItem = item.fecha.slice(0, 7)
 
-      // Buscar por nombre_clave exacto en Supabase
-      const { data: existentes } = await supabase
+      // Buscar por nombre exacto primero
+      const { data: exactos } = await supabase
         .from('caducidades')
-        .select('id, nombre, fecha_caducidad, nombre_clave')
-        .eq('nombre_clave', nombreClave)
+        .select('id, fecha_caducidad')
+        .eq('nombre', item.nombre)
         .limit(1)
 
-      if (existentes && existentes.length > 0) {
-        const match = existentes[0]
+      if (exactos && exactos.length > 0) {
+        const match = exactos[0]
         const anioMesExistente = match.fecha_caducidad ? match.fecha_caducidad.slice(0, 7) : null
-        const anioMesItem = item.fecha.slice(0, 7)
         if (anioMesExistente === anioMesItem) {
           ignorados++
         } else {
-          await supabase.from('caducidades')
-            .update({ fecha_caducidad: item.fecha })
-            .eq('id', match.id)
+          await supabase.from('caducidades').update({ fecha_caducidad: item.fecha }).eq('id', match.id)
           actualizados++
         }
-      } else {
-        // No existe → crear con nombre_clave
-        const { error } = await supabase.from('caducidades').insert([{
-          nombre: item.nombre,
-          nombre_clave: nombreClave,
-          categoria: 'Otros',
-          fecha_caducidad: item.fecha,
-          hoja_origen: 'Albaran escaneado'
-        }])
-        if (!error) creados++
+        continue
       }
+
+      // Si no hay exacto, buscar por nombre similar (ilike con palabras clave)
+      const palabras = item.nombre.toLowerCase()
+        .replace(/opciones/gi, '')
+        .replace(/[^a-z0-9 ]/g, ' ')
+        .split(' ')
+        .filter(w => w.length > 4)
+        .slice(0, 2)
+
+      if (palabras.length >= 1) {
+        const { data: similares } = await supabase
+          .from('caducidades')
+          .select('id, nombre, fecha_caducidad')
+          .ilike('nombre', '%' + palabras[0] + '%')
+          .limit(20)
+
+        if (similares && similares.length > 0) {
+          const palabrasItem = item.nombre.toLowerCase().replace(/opciones/gi,'').split(' ').filter(w => w.length > 3)
+          let mejor = null
+          let mejorScore = 0
+          for (const s of similares) {
+            const palabrasS = s.nombre.toLowerCase().replace(/opciones/gi,'').split(' ').filter(w => w.length > 3)
+            const score = palabrasItem.filter(w => palabrasS.includes(w)).length
+            if (score >= 2 && score > mejorScore) {
+              mejorScore = score
+              mejor = s
+            }
+          }
+          if (mejor) {
+            const anioMesExistente = mejor.fecha_caducidad ? mejor.fecha_caducidad.slice(0, 7) : null
+            if (anioMesExistente === anioMesItem) {
+              ignorados++
+            } else {
+              await supabase.from('caducidades').update({ fecha_caducidad: item.fecha }).eq('id', mejor.id)
+              actualizados++
+            }
+            continue
+          }
+        }
+      }
+
+      // No existe → crear
+      const { error } = await supabase.from('caducidades').insert([{
+        nombre: item.nombre,
+        categoria: 'Otros',
+        fecha_caducidad: item.fecha,
+        hoja_origen: 'Albaran escaneado'
+      }])
+      if (!error) creados++
     }
 
     let msg = ''
