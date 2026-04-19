@@ -889,6 +889,14 @@ Si no hay productos con fecha: {"productos": []}`
     setFechasLoading(false)
   }
 
+  const normalizarNombreCad = (nombre) => {
+    return nombre.toLowerCase()
+      .replace(/\s*-?\s*opciones\s*:?\s*[^\-
+]*/gi, '') // quitar solo "- Opciones : X mg/ml"
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ').trim()
+  }
+
   const confirmarFechas = async () => {
     setFechasLoading(true)
     let creados = 0
@@ -897,38 +905,42 @@ Si no hay productos con fecha: {"productos": []}`
 
     for (const item of fechasResultados) {
       if (item.ignorar) continue
-      const anioMesItem = item.fecha.slice(0, 7) // YYYY-MM
+      const anioMesItem = item.fecha.slice(0, 7)
+      const nombreNormItem = normalizarNombreCad(item.nombre)
+      const palabrasItem = nombreNormItem.split(' ').filter(w => w.length > 3)
 
-      // Buscar en Supabase si ya existe con nombre similar
+      if (palabrasItem.length === 0) continue
+
+      // Buscar en Supabase con la primera palabra clave
       const { data: existentes } = await supabase
         .from('caducidades')
         .select('id, nombre, fecha_caducidad')
-        .ilike('nombre', '%' + item.nombre.split(' ').filter(w => w.length > 4)[0] + '%')
-        .limit(20)
+        .ilike('nombre', '%' + palabrasItem[0] + '%')
+        .limit(30)
 
-      // Ver si alguno coincide por nombre (2+ palabras) y mes/año
       let match = null
       if (existentes && existentes.length > 0) {
-        const palabrasItem = item.nombre.toLowerCase().split(' ').filter(w => w.length > 3)
-        match = existentes.find(e => {
-          const palabrasE = e.nombre.toLowerCase().split(' ').filter(w => w.length > 3)
+        // Encontrar el que más palabras comparte
+        let mejorPuntuacion = 0
+        for (const e of existentes) {
+          const palabrasE = normalizarNombreCad(e.nombre).split(' ').filter(w => w.length > 3)
           const comunes = palabrasItem.filter(w => palabrasE.includes(w)).length
-          return comunes >= 2
-        })
+          if (comunes >= 2 && comunes > mejorPuntuacion) {
+            mejorPuntuacion = comunes
+            match = e
+          }
+        }
       }
 
       if (match) {
         const anioMesExistente = match.fecha_caducidad ? match.fecha_caducidad.slice(0, 7) : null
         if (anioMesExistente === anioMesItem) {
-          // Mismo producto, misma fecha → ignorar
           ignorados++
         } else {
-          // Mismo producto, fecha diferente → actualizar
           await supabase.from('caducidades').update({ fecha_caducidad: item.fecha }).eq('id', match.id)
           actualizados++
         }
       } else {
-        // No existe → crear
         const { error } = await supabase.from('caducidades').insert([{
           nombre: item.nombre,
           categoria: 'Otros',
