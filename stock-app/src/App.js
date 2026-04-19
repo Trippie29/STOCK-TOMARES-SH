@@ -892,22 +892,58 @@ Si no hay productos con fecha: {"productos": []}`
   const confirmarFechas = async () => {
     setFechasLoading(true)
     let creados = 0
-    let errores = 0
+    let ignorados = 0
+    let actualizados = 0
 
     for (const item of fechasResultados) {
       if (item.ignorar) continue
-      const { error } = await supabase.from('caducidades').insert([{
-        nombre: item.nombre,
-        categoria: 'Otros',
-        fecha_caducidad: item.fecha,
-        hoja_origen: 'Albaran escaneado'
-      }])
-      if (!error) creados++
-      else { console.error('Error guardando:', item.nombre, error); errores++ }
+      const anioMesItem = item.fecha.slice(0, 7) // YYYY-MM
+
+      // Buscar en Supabase si ya existe con nombre similar
+      const { data: existentes } = await supabase
+        .from('caducidades')
+        .select('id, nombre, fecha_caducidad')
+        .ilike('nombre', '%' + item.nombre.split(' ').filter(w => w.length > 4)[0] + '%')
+        .limit(20)
+
+      // Ver si alguno coincide por nombre (2+ palabras) y mes/año
+      let match = null
+      if (existentes && existentes.length > 0) {
+        const palabrasItem = item.nombre.toLowerCase().split(' ').filter(w => w.length > 3)
+        match = existentes.find(e => {
+          const palabrasE = e.nombre.toLowerCase().split(' ').filter(w => w.length > 3)
+          const comunes = palabrasItem.filter(w => palabrasE.includes(w)).length
+          return comunes >= 2
+        })
+      }
+
+      if (match) {
+        const anioMesExistente = match.fecha_caducidad ? match.fecha_caducidad.slice(0, 7) : null
+        if (anioMesExistente === anioMesItem) {
+          // Mismo producto, misma fecha → ignorar
+          ignorados++
+        } else {
+          // Mismo producto, fecha diferente → actualizar
+          await supabase.from('caducidades').update({ fecha_caducidad: item.fecha }).eq('id', match.id)
+          actualizados++
+        }
+      } else {
+        // No existe → crear
+        const { error } = await supabase.from('caducidades').insert([{
+          nombre: item.nombre,
+          categoria: 'Otros',
+          fecha_caducidad: item.fecha,
+          hoja_origen: 'Albaran escaneado'
+        }])
+        if (!error) creados++
+      }
     }
 
-    let msg = creados + ' fechas guardadas'
-    if (errores > 0) msg += ' · ' + errores + ' errores'
+    let msg = ''
+    if (creados > 0) msg += creados + ' nuevas'
+    if (actualizados > 0) msg += (msg ? ' · ' : '') + actualizados + ' actualizadas'
+    if (ignorados > 0) msg += (msg ? ' · ' : '') + ignorados + ' ya existian'
+    if (!msg) msg = 'Sin cambios'
     showToast(msg)
     setModalFechas(false)
     setFechasImg(null); setFechasPreview(null); setFechasResultados([]); setFechasPaso(1)
