@@ -889,11 +889,19 @@ Si no hay productos con fecha: {"productos": []}`
     setFechasLoading(false)
   }
 
-  const normalizarNombreCad = (nombre) => {
+  const generarNombreClave = (nombre) => {
+    // Genera una clave única y estable para cada producto
+    // Quita palabras genéricas y deja solo lo esencial
     return nombre.toLowerCase()
-      .replace(/opciones[^a-z]*/gi, '') // quitar "Opciones : X mg/ml"
+      .replace(/opciones[^,
+]*/gi, '')
       .replace(/[^a-z0-9]/g, ' ')
-      .replace(/ +/g, ' ').trim()
+      .replace(/ +/g, ' ')
+      .trim()
+      .split(' ')
+      .filter(w => w.length > 2)
+      .sort() // ordenar para que "Aroma Viper" y "Viper Aroma" den la misma clave
+      .join('_')
   }
 
   const confirmarFechas = async () => {
@@ -904,44 +912,34 @@ Si no hay productos con fecha: {"productos": []}`
 
     for (const item of fechasResultados) {
       if (item.ignorar) continue
-      const anioMesItem = item.fecha.slice(0, 7)
-      const nombreNormItem = normalizarNombreCad(item.nombre)
-      const palabrasItem = nombreNormItem.split(' ').filter(w => w.length > 3)
 
-      if (palabrasItem.length === 0) continue
+      const nombreClave = generarNombreClave(item.nombre)
+      if (!nombreClave) continue
 
-      // Buscar en Supabase con la primera palabra clave
+      // Buscar por nombre_clave exacto en Supabase
       const { data: existentes } = await supabase
         .from('caducidades')
-        .select('id, nombre, fecha_caducidad')
-        .ilike('nombre', '%' + palabrasItem[0] + '%')
-        .limit(30)
+        .select('id, nombre, fecha_caducidad, nombre_clave')
+        .eq('nombre_clave', nombreClave)
+        .limit(1)
 
-      let match = null
       if (existentes && existentes.length > 0) {
-        // Encontrar el que más palabras comparte
-        let mejorPuntuacion = 0
-        for (const e of existentes) {
-          const palabrasE = normalizarNombreCad(e.nombre).split(' ').filter(w => w.length > 3)
-          const comunes = palabrasItem.filter(w => palabrasE.includes(w)).length
-          if (comunes >= 2 && comunes > mejorPuntuacion) {
-            mejorPuntuacion = comunes
-            match = e
-          }
-        }
-      }
-
-      if (match) {
+        const match = existentes[0]
         const anioMesExistente = match.fecha_caducidad ? match.fecha_caducidad.slice(0, 7) : null
+        const anioMesItem = item.fecha.slice(0, 7)
         if (anioMesExistente === anioMesItem) {
           ignorados++
         } else {
-          await supabase.from('caducidades').update({ fecha_caducidad: item.fecha }).eq('id', match.id)
+          await supabase.from('caducidades')
+            .update({ fecha_caducidad: item.fecha })
+            .eq('id', match.id)
           actualizados++
         }
       } else {
+        // No existe → crear con nombre_clave
         const { error } = await supabase.from('caducidades').insert([{
           nombre: item.nombre,
+          nombre_clave: nombreClave,
           categoria: 'Otros',
           fecha_caducidad: item.fecha,
           hoja_origen: 'Albaran escaneado'
