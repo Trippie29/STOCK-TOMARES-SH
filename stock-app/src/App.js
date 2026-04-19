@@ -893,28 +893,69 @@ Si no hay productos con fecha: {"productos": []}`
     setFechasLoading(true)
     let creados = 0
     let actualizados = 0
+    let ignorados = 0
+
     for (const item of fechasResultados) {
       if (item.ignorar) continue
-      if (item.accion === 'actualizar' && item.id_existente) {
-        // Actualizar fecha existente
-        const { error } = await supabase.from('caducidades')
-          .update({ fecha_caducidad: item.fecha })
-          .eq('id', item.id_existente)
-        if (!error) actualizados++
-      } else if (item.accion === 'crear' || !item.accion) {
-        // Crear nuevo registro
+
+      const anioMesItem = item.fecha ? item.fecha.slice(0,7) : null
+      if (!anioMesItem) continue
+
+      // Buscar en Supabase si ya existe este nombre (búsqueda flexible por palabras)
+      const palabras = item.nombre.toLowerCase()
+        .split(/[\s\-:,()]+/)
+        .filter(w => w.length > 4)
+        .slice(0, 3) // usar las 3 primeras palabras significativas
+
+      // Buscar coincidencia en Supabase
+      let existente = null
+      for (const palabra of palabras) {
+        const { data } = await supabase
+          .from('caducidades')
+          .select('id, nombre, fecha_caducidad')
+          .ilike('nombre', '%' + palabra + '%')
+          .limit(10)
+        
+        if (data && data.length > 0) {
+          // Ver si alguno coincide suficientemente
+          const match = data.find(r => {
+            const nombreNorm = r.nombre.toLowerCase()
+            const coincidencias = palabras.filter(p => nombreNorm.includes(p)).length
+            return coincidencias >= 2
+          })
+          if (match) { existente = match; break }
+        }
+      }
+
+      if (existente) {
+        const anioMesExistente = existente.fecha_caducidad ? existente.fecha_caducidad.slice(0,7) : null
+        if (anioMesExistente === anioMesItem) {
+          // Misma fecha → ignorar
+          ignorados++
+          continue
+        } else {
+          // Fecha diferente → actualizar
+          const { error } = await supabase.from('caducidades')
+            .update({ fecha_caducidad: item.fecha })
+            .eq('id', existente.id)
+          if (!error) actualizados++
+        }
+      } else {
+        // No existe → crear
         const { error } = await supabase.from('caducidades').insert([{
           nombre: item.nombre,
-          categoria: item.encontrado ? item.encontrado.categoria : 'Otros',
+          categoria: 'Otros',
           fecha_caducidad: item.fecha,
           hoja_origen: 'Albaran escaneado'
         }])
         if (!error) creados++
       }
     }
+
     let msg = ''
-    if (creados > 0) msg += creados + ' fechas nuevas añadidas'
-    if (actualizados > 0) msg += (msg ? ' · ' : '') + actualizados + ' fechas actualizadas'
+    if (creados > 0) msg += creados + ' nuevas'
+    if (actualizados > 0) msg += (msg ? ' · ' : '') + actualizados + ' actualizadas'
+    if (ignorados > 0) msg += (msg ? ' · ' : '') + ignorados + ' ya existian'
     if (!msg) msg = 'Sin cambios'
     showToast(msg)
     setModalFechas(false)
