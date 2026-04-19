@@ -893,8 +893,7 @@ Si no hay productos con fecha: {"productos": []}`
     // Genera una clave única y estable para cada producto
     // Quita palabras genéricas y deja solo lo esencial
     return nombre.toLowerCase()
-      .replace(/opciones[^,
-]*/gi, '')
+      .replace(/opciones/gi, '')
       .replace(/[^a-z0-9]/g, ' ')
       .replace(/ +/g, ' ')
       .trim()
