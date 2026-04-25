@@ -2,6 +2,129 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from './supabase'
 import './App.css'
 
+const SHEETS_ID = '1-nmJ-c89defA5pRnfldsSkgbPllnFFzb'
+const SHEETS_CLIENT_EMAIL = 'fechascaducidades@fechas-caducidades.iam.gserviceaccount.com'
+const SHEETS_PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDCh4lnOlsFEKXE
+jZq+5DNuzm9Zem0z5Gnlyyyb66S6mtcj83t/nkoRc76dp1NMM0lGzm0TCWCO3bP1
+riLS495Al0h3ppTt2ZY2XbMTCG/uAjBMRxKkkJLhNmcu1DNQO00QWIamOkTz9hC1
+lduBMv2CHw91RkW0xmu53c+So6LqomrR7ixg68G3Nn9+/ZoLJM3pLmFIGkU+kf8Y
+ILWgCOEy1oZGWjn1XRnYdRu534Xn0kXIPFmWPHMZRB+ZWuvr9WUkKdO2AzFQ1KLY
+R2Bi8C0rfAacpTHANFSiL91XuZ1snn/aaxymD4H57HhOeovrHxbEuiVONqHYyBBK
+0EbKCw77AgMBAAECggEABIVMcti14F21mpcPw4t65y0zHLrE7w30uwOxbEugBpzo
+Dpo7Zxgl4VDysHExk4ln9kb6Po8U94nwobhaiAOw7hrRWp9wERyYf7UVmO14DcTo
+0sNzyQHhfOeoQX7wbUrrgfYw5bypWqgMDFykBSRdPR8PbbDGKr0ziaWYzunnUxNb
+nTbQUIn0D2KT3erc+p9vbKUN6BFQpG/17UZASfuGPmEDIOCH15ykCpEGNsm5sl4d
+0cJxP39NdkfhxNqEwAH1XJzc1/12Cca75T22eyG4xbnNbFrwphgvg2b2TPdsmhjz
+n44WdeE+JaEwjIdwaePRblEnc96AS/1arKOMinpL+QKBgQDs6yO3o3SPUAbaKSQe
+93koyOFlx7tY0DHTw8/wk6ukdyd5zInLmsvaoTMFNhDq5ijvVPVteuMm7xg6VGYi
+Z4kF+p8uXu7S5OQhlFJV87hm4j8OeK8HPnnoew3lhlXU3Y/030cKDxuKvvqW29EX
+KV3LbZMgEOXDwFknX95INAEfqQKBgQDSMmfspIcZt60uJImWxwiLhQAN3Mf+lQW0
+lrEb1nnMR4Zf4J/dfLU0KMmlj2c5Bjswge/GrXvRcowIZVpEHr5ulhV2+hvBgkPo
+Nvjo0bj8PBY5amel20c4kUiXAgyRJIE+tWS8QCZsWiHjLRFsXodqIChkUhUVuL8c
+k9rYJlgwAwKBgQCGEh7ZSg+pFjF6fbOqLoOK9/rNnTTA8rhvzSy8SOTmImPdgkks
+RkI8S+LSfSEfvPXHUn284cDwBHficmaF669YCdbQ5/ogsFUFR6k8aLqexkPGzbbG
+060rSY+4pseluWhAu6W45InCf4bRnj157PfeKfkLOWS83PnW1WK123ATWQKBgEZQ
+TElyBCuLMOhlmo0QiYA6fnkkqNY1vZHacuaQCXBXYNED0BaEWA1Zs5KpdOszdWtV
+nAMHF4tJ2SQZ22c8LZHKrOV+5vgFfnfYo80mEs51vy13tbJatulqWDEDo3aOEpoK
+jecXQoMuZ3WaJuDsgjnzBfABMUJx6aRCpYt20DtHAoGBAJkuTr3ACtUA1A30+06E
+MxsOtQU9ynHywlFUJq1r/dfR1p6yebEL1yVL+9zT5LtvRPDI2XnfSSliJjjUvC9f
+eZR6wSJuok+ot7nE3T5n3WllKUedUBp6kY1xGnEt3EpqHfmxA6AqvED2zf1fXfla
+m7OqzzR8ZegqwkxphISdIaDU
+-----END PRIVATE KEY-----`
+
+// Detectar pestaña según nombre del producto
+const detectarPestana = (nombre) => {
+  const n = nombre.toLowerCase()
+  if (n.includes('minilongfill')) return 'MiniLongfill'
+  if (n.includes('longfill')) return 'Longfill'
+  if (n.startsWith('sales') || n.startsWith('sale ')) return 'Sales'
+  if (n.includes('aromanic')) return 'Aromanic'
+  if (n.startsWith('aroma')) return 'Aromas'
+  if (n.includes('base') || n.includes('bases')) return 'Bases'
+  if (n.includes('nicokit')) return 'Nicokits'
+  if (n.includes('cafeina') || n.includes('nicotina') || n.includes('pouche')) return 'Cafeina & Nicotina'
+  return 'Desechables'
+}
+
+// Obtener token de acceso para Google Sheets API
+const getSheetsToken = async () => {
+  const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
+  const now = Math.floor(Date.now() / 1000)
+  const claim = btoa(JSON.stringify({
+    iss: SHEETS_CLIENT_EMAIL,
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600,
+    iat: now
+  }))
+  
+  // Importar clave privada y firmar
+  const pemContents = SHEETS_PRIVATE_KEY
+    .replace('-----BEGIN PRIVATE KEY-----', '')
+    .replace('-----END PRIVATE KEY-----', '')
+    .replace(/
+/g, '')
+  
+  const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8', binaryDer.buffer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false, ['sign']
+  )
+  
+  const signingInput = header + '.' + claim
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5', cryptoKey,
+    new TextEncoder().encode(signingInput)
+  )
+  
+  const jwt = signingInput + '.' + btoa(String.fromCharCode(...new Uint8Array(signature)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+  
+  const resp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=' + jwt
+  })
+  const data = await resp.json()
+  return data.access_token
+}
+
+// Leer datos de una pestaña
+const sheetsRead = async (token, pestana) => {
+  const resp = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${encodeURIComponent(pestana)}`,
+    { headers: { Authorization: 'Bearer ' + token } }
+  )
+  const data = await resp.json()
+  return data.values || []
+}
+
+// Escribir en una celda específica
+const sheetsWrite = async (token, pestana, rango, valor) => {
+  await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${encodeURIComponent(pestana + '!' + rango)}?valueInputOption=RAW`,
+    {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [[valor]] })
+    }
+  )
+}
+
+// Añadir fila nueva al final
+const sheetsAppend = async (token, pestana, fila) => {
+  await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${encodeURIComponent(pestana)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+    {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [fila] })
+    }
+  )
+}
+
 const OPENAI_KEY = ['sk-proj-WUCN3UA','1g2h-gRCqSJ2YGd','gOYNTR3jwudNegM','bhcwmFFytR718-2','LzcDQNh1Z2e2-OI','JKk71-zT3BlbkFJ','zb0PWnkjJI09hpt','8vxdaEbn0Tn1KO_','uGZ02OyRboRxqcG','aF1nurCvE0vLxXe','ySwAUNVCVsW-cA'].join('')
 
 const CATEGORIAS_TREE = [
@@ -895,82 +1018,113 @@ Si no hay productos con fecha: {"productos": []}`
     let ignorados = 0
     let actualizados = 0
 
-    for (const item of fechasResultados) {
-      if (item.ignorar) continue
+    try {
+      const token = await getSheetsToken()
 
-      const anioMesItem = item.fecha.slice(0, 7)
+      for (const item of fechasResultados) {
+        if (item.ignorar) continue
 
-      // Buscar por nombre exacto primero
-      const { data: exactos } = await supabase
-        .from('caducidades')
-        .select('id, fecha_caducidad')
-        .eq('nombre', item.nombre)
-        .limit(1)
+        const pestana = detectarPestana(item.nombre)
+        const filas = await sheetsRead(token, pestana)
+        if (!filas || filas.length === 0) continue
 
-      if (exactos && exactos.length > 0) {
-        const match = exactos[0]
-        const anioMesExistente = match.fecha_caducidad ? match.fecha_caducidad.slice(0, 7) : null
-        if (anioMesExistente === anioMesItem) {
-          ignorados++
-        } else {
-          await supabase.from('caducidades').update({ fecha_caducidad: item.fecha }).eq('id', match.id)
-          actualizados++
-        }
-        continue
-      }
+        // Detectar columnas de caducidad en la fila de cabeceras
+        const cabecera = filas[0].map(c => (c || '').toLowerCase())
+        const colsCaducidad = []
+        cabecera.forEach((c, i) => {
+          if (c.includes('caducidad') || c.includes('caducidad')) colsCaducidad.push(i)
+        })
+        if (colsCaducidad.length === 0) continue
 
-      // Si no hay exacto, buscar por nombre similar (ilike con palabras clave)
-      const palabras = item.nombre.toLowerCase()
-        .replace(/opciones/gi, '')
-        .replace(/[^a-z0-9 ]/g, ' ')
-        .split(' ')
-        .filter(w => w.length > 4)
-        .slice(0, 2)
+        // Buscar el producto en la hoja
+        const nombreItem = item.nombre.toLowerCase().replace(/opciones[^,]*/gi, '').trim()
+        const palabrasItem = nombreItem.split(' ').filter(w => w.length > 3)
 
-      if (palabras.length >= 1) {
-        const { data: similares } = await supabase
-          .from('caducidades')
-          .select('id, nombre, fecha_caducidad')
-          .ilike('nombre', '%' + palabras[0] + '%')
-          .limit(20)
-
-        if (similares && similares.length > 0) {
-          const palabrasItem = item.nombre.toLowerCase().replace(/opciones/gi,'').split(' ').filter(w => w.length > 3)
-          let mejor = null
-          let mejorScore = 0
-          for (const s of similares) {
-            const palabrasS = s.nombre.toLowerCase().replace(/opciones/gi,'').split(' ').filter(w => w.length > 3)
-            const score = palabrasItem.filter(w => palabrasS.includes(w)).length
-            if (score >= 2 && score > mejorScore) {
-              mejorScore = score
-              mejor = s
-            }
+        let filaIdx = -1
+        let mejorScore = 0
+        for (let i = 1; i < filas.length; i++) {
+          const nombreFila = (filas[i][1] || '').toLowerCase()
+          const score = palabrasItem.filter(w => nombreFila.includes(w)).length
+          if (score >= 2 && score > mejorScore) {
+            mejorScore = score
+            filaIdx = i
           }
-          if (mejor) {
-            const anioMesExistente = mejor.fecha_caducidad ? mejor.fecha_caducidad.slice(0, 7) : null
-            if (anioMesExistente === anioMesItem) {
-              ignorados++
+        }
+
+        // Convertir fecha YYYY-MM-DD a MM/YYYY para Google Sheets
+        const fechaSheet = item.fecha ? item.fecha.slice(5, 7) + '/' + item.fecha.slice(0, 4) : ''
+        const anioMesItem = item.fecha ? item.fecha.slice(0, 7) : ''
+
+        if (filaIdx >= 0) {
+          // Producto encontrado — buscar columna de caducidad vacía o con misma fecha
+          const fila = filas[filaIdx]
+          let yaExiste = false
+          let colVacia = -1
+
+          for (const col of colsCaducidad) {
+            const val = (fila[col] || '').trim()
+            if (!val || val === 'SIN FECHA') {
+              if (colVacia === -1) colVacia = col
             } else {
-              await supabase.from('caducidades').update({ fecha_caducidad: item.fecha }).eq('id', mejor.id)
-              actualizados++
+              // Comparar mes/año
+              const partes = val.split('/')
+              let anioMesFila = ''
+              if (partes.length === 2) {
+                anioMesFila = partes[1] + '-' + partes[0].padStart(2, '0')
+              }
+              if (anioMesFila === anioMesItem) {
+                yaExiste = true
+                break
+              }
             }
-            continue
           }
+
+          if (yaExiste) {
+            ignorados++
+          } else if (colVacia >= 0) {
+            // Escribir en la primera columna vacía
+            const colLetra = String.fromCharCode(65 + colVacia)
+            const numFila = filaIdx + 1
+            await sheetsWrite(token, pestana, colLetra + numFila, fechaSheet)
+            actualizados++
+          } else {
+            // Todas llenas — buscar la fecha más antigua y sobrescribirla
+            let colMasAntigua = colsCaducidad[0]
+            let fechaMasAntigua = null
+            for (const col of colsCaducidad) {
+              const val = (fila[col] || '').trim()
+              if (val && val !== 'SIN FECHA') {
+                const partes = val.split('/')
+                if (partes.length === 2) {
+                  const fechaCol = new Date(parseInt(partes[1]), parseInt(partes[0]) - 1)
+                  if (!fechaMasAntigua || fechaCol < fechaMasAntigua) {
+                    fechaMasAntigua = fechaCol
+                    colMasAntigua = col
+                  }
+                }
+              }
+            }
+            const colLetra = String.fromCharCode(65 + colMasAntigua)
+            const numFila = filaIdx + 1
+            await sheetsWrite(token, pestana, colLetra + numFila, fechaSheet)
+            actualizados++
+          }
+        } else {
+          // Producto no existe → añadir fila nueva
+          const nuevaFila = ['', item.nombre, fechaSheet]
+          await sheetsAppend(token, pestana, nuevaFila)
+          creados++
         }
       }
-
-      // No existe → crear
-      const { error } = await supabase.from('caducidades').insert([{
-        nombre: item.nombre,
-        categoria: 'Otros',
-        fecha_caducidad: item.fecha,
-        hoja_origen: 'Albaran escaneado'
-      }])
-      if (!error) creados++
+    } catch(e) {
+      console.error('Sheets error:', e)
+      showToast('Error conectando con Google Sheets', 'error')
+      setFechasLoading(false)
+      return
     }
 
     let msg = ''
-    if (creados > 0) msg += creados + ' nuevas'
+    if (creados > 0) msg += creados + ' nuevas en Sheets'
     if (actualizados > 0) msg += (msg ? ' · ' : '') + actualizados + ' actualizadas'
     if (ignorados > 0) msg += (msg ? ' · ' : '') + ignorados + ' ya existian'
     if (!msg) msg = 'Sin cambios'
