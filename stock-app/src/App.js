@@ -860,28 +860,30 @@ export default function App() {
         fecha: c.fecha_caducidad ? c.fecha_caducidad.slice(0,7) : null
       }))
 
-      const prompt = `Eres un asistente para una tienda de vapeo en España. Analiza este albarán de Sinhumo.
+      const prompt = `Eres un asistente para una tienda de vapeo en España. Analiza este albarán de Sinhumo con MÁXIMA PRECISIÓN.
 
 ESTRUCTURA DEL ALBARÁN:
 - Tabla con columnas: UB (primera columna izquierda), Producto, Cant.
-- En la columna UB hay fechas escritas a mano (números con barras /) o nada
+- En la columna UB hay fechas escritas a mano con bolígrafo azul (números con barras /) o nada
 
-CÓMO LEER LAS FECHAS:
-- Formato MES/AÑO: "1/29"=2029-01, "12/28"=2028-12, "7/28"=2028-07
-- Formato DIA/MES/AÑO: "15/11/27"=2027-11, "17/07/26"=2026-07
-- Si no hay fecha → ignora ese producto
+CÓMO LEER LAS FECHAS - CRÍTICO:
+- Formato MES/AÑO: "9/28"=sept 2028, "12/28"=dic 2028, "1/29"=ene 2029
+- Formato DIA/MES/AÑO: "15/11/27"=nov 2027
+- Los años válidos son SIEMPRE entre 26 y 30 (2026-2030). NUNCA hay años anteriores.
+- Si lees un año como 23, 24 o 25 → estás leyendo mal, corrígelo:
+  * 23 → es 28 (el 3 es en realidad un 8)
+  * 24 → es 29 (el 4 es en realidad un 9)
+  * 25 → puede ser 25 solo si es 2025, si no es 28 o 29
+- CONFUSIONES FRECUENTES en escritura a mano:
+  * 8 y 3 se parecen mucho → en el año SIEMPRE es 8 (ej: 28, no 23)
+  * 9 y 4 se parecen mucho → en el año SIEMPRE es 9 (ej: 29, no 24)
+  * 6 y 0 también se parecen → fíjate bien
+- Si no hay fecha o hay una X → ignora ese producto
 
-PRODUCTOS YA EN CADUCIDADES (id, nombre, fecha YYYY-MM):
-${JSON.stringify(listaCaducidades)}
-
-Para cada producto del albarán con fecha:
-1. Busca si existe en la lista anterior por nombre similar
-2. Si existe Y misma fecha (año-mes) → accion "ignorar"  
-3. Si existe Y fecha diferente → accion "actualizar", pon su id en id_existente
-4. Si no existe → accion "crear"
+Devuelve la fecha EXACTAMENTE como está escrita (ej: "9/28", "1/29", "12/28")
 
 Responde SOLO con JSON válido sin texto extra:
-{"productos": [{"nombre": "nombre completo", "fecha_raw": "fecha escrita", "accion": "crear|actualizar|ignorar", "id_existente": null}]}
+{"productos": [{"nombre": "nombre completo del producto", "fecha_raw": "fecha tal como está escrita"}]}
 
 Si no hay productos con fecha: {"productos": []}` 
 
