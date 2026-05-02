@@ -2,38 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from './supabase'
 import './App.css'
 
-const SHEETS_ID = '1-nmJ-c89defA5pRnfldsSkgbPllnFFzb'
-const SHEETS_CLIENT_EMAIL = 'fechascaducidades@fechas-caducidades.iam.gserviceaccount.com'
-const SHEETS_PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
-MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDCh4lnOlsFEKXE
-jZq+5DNuzm9Zem0z5Gnlyyyb66S6mtcj83t/nkoRc76dp1NMM0lGzm0TCWCO3bP1
-riLS495Al0h3ppTt2ZY2XbMTCG/uAjBMRxKkkJLhNmcu1DNQO00QWIamOkTz9hC1
-lduBMv2CHw91RkW0xmu53c+So6LqomrR7ixg68G3Nn9+/ZoLJM3pLmFIGkU+kf8Y
-ILWgCOEy1oZGWjn1XRnYdRu534Xn0kXIPFmWPHMZRB+ZWuvr9WUkKdO2AzFQ1KLY
-R2Bi8C0rfAacpTHANFSiL91XuZ1snn/aaxymD4H57HhOeovrHxbEuiVONqHYyBBK
-0EbKCw77AgMBAAECggEABIVMcti14F21mpcPw4t65y0zHLrE7w30uwOxbEugBpzo
-Dpo7Zxgl4VDysHExk4ln9kb6Po8U94nwobhaiAOw7hrRWp9wERyYf7UVmO14DcTo
-0sNzyQHhfOeoQX7wbUrrgfYw5bypWqgMDFykBSRdPR8PbbDGKr0ziaWYzunnUxNb
-nTbQUIn0D2KT3erc+p9vbKUN6BFQpG/17UZASfuGPmEDIOCH15ykCpEGNsm5sl4d
-0cJxP39NdkfhxNqEwAH1XJzc1/12Cca75T22eyG4xbnNbFrwphgvg2b2TPdsmhjz
-n44WdeE+JaEwjIdwaePRblEnc96AS/1arKOMinpL+QKBgQDs6yO3o3SPUAbaKSQe
-93koyOFlx7tY0DHTw8/wk6ukdyd5zInLmsvaoTMFNhDq5ijvVPVteuMm7xg6VGYi
-Z4kF+p8uXu7S5OQhlFJV87hm4j8OeK8HPnnoew3lhlXU3Y/030cKDxuKvvqW29EX
-KV3LbZMgEOXDwFknX95INAEfqQKBgQDSMmfspIcZt60uJImWxwiLhQAN3Mf+lQW0
-lrEb1nnMR4Zf4J/dfLU0KMmlj2c5Bjswge/GrXvRcowIZVpEHr5ulhV2+hvBgkPo
-Nvjo0bj8PBY5amel20c4kUiXAgyRJIE+tWS8QCZsWiHjLRFsXodqIChkUhUVuL8c
-k9rYJlgwAwKBgQCGEh7ZSg+pFjF6fbOqLoOK9/rNnTTA8rhvzSy8SOTmImPdgkks
-RkI8S+LSfSEfvPXHUn284cDwBHficmaF669YCdbQ5/ogsFUFR6k8aLqexkPGzbbG
-060rSY+4pseluWhAu6W45InCf4bRnj157PfeKfkLOWS83PnW1WK123ATWQKBgEZQ
-TElyBCuLMOhlmo0QiYA6fnkkqNY1vZHacuaQCXBXYNED0BaEWA1Zs5KpdOszdWtV
-nAMHF4tJ2SQZ22c8LZHKrOV+5vgFfnfYo80mEs51vy13tbJatulqWDEDo3aOEpoK
-jecXQoMuZ3WaJuDsgjnzBfABMUJx6aRCpYt20DtHAoGBAJkuTr3ACtUA1A30+06E
-MxsOtQU9ynHywlFUJq1r/dfR1p6yebEL1yVL+9zT5LtvRPDI2XnfSSliJjjUvC9f
-eZR6wSJuok+ot7nE3T5n3WllKUedUBp6kY1xGnEt3EpqHfmxA6AqvED2zf1fXfla
-m7OqzzR8ZegqwkxphISdIaDU
------END PRIVATE KEY-----`
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwjvT661HK307w25F_AMxT4-KfkaCp6BSqMthKgw-R5vGrjFZmWMxhD4uqP63PPm236TA/exec'
 
-// Detectar pestaña según nombre del producto
 const detectarPestana = (nombre) => {
   const n = nombre.toLowerCase()
   if (n.includes('minilongfill')) return 'MiniLongfill'
@@ -47,81 +17,31 @@ const detectarPestana = (nombre) => {
   return 'Desechables'
 }
 
-// Obtener token de acceso para Google Sheets API
-const getSheetsToken = async () => {
-  const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
-  const now = Math.floor(Date.now() / 1000)
-  const claim = btoa(JSON.stringify({
-    iss: SHEETS_CLIENT_EMAIL,
-    scope: 'https://www.googleapis.com/auth/spreadsheets',
-    aud: 'https://oauth2.googleapis.com/token',
-    exp: now + 3600,
-    iat: now
-  }))
-  
-  // Importar clave privada y firmar
-  const pemContents = SHEETS_PRIVATE_KEY
-    .replace('-----BEGIN PRIVATE KEY-----', '')
-    .replace('-----END PRIVATE KEY-----', '')
-    .split('\n').join('')
-  
-  const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
-  const cryptoKey = await crypto.subtle.importKey(
-    'pkcs8', binaryDer.buffer,
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false, ['sign']
-  )
-  
-  const signingInput = header + '.' + claim
-  const signature = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5', cryptoKey,
-    new TextEncoder().encode(signingInput)
-  )
-  
-  const jwt = signingInput + '.' + btoa(String.fromCharCode(...new Uint8Array(signature)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
-  
-  const resp = await fetch('https://oauth2.googleapis.com/token', {
+const sheetsLeer = async (pestana) => {
+  const resp = await fetch(APPS_SCRIPT_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=' + jwt
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ accion: 'leer', pestana })
   })
   const data = await resp.json()
-  return data.access_token
+  if (data.error) throw new Error(data.error)
+  return data.valores || []
 }
 
-// Leer datos de una pestaña
-const sheetsRead = async (token, pestana) => {
-  const resp = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${encodeURIComponent(pestana)}`,
-    { headers: { Authorization: 'Bearer ' + token } }
-  )
-  const data = await resp.json()
-  return data.values || []
+const sheetsEscribir = async (pestana, fila, columna, valor) => {
+  await fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ accion: 'escribir', pestana, fila, columna, valor })
+  })
 }
 
-// Escribir en una celda específica
-const sheetsWrite = async (token, pestana, rango, valor) => {
-  await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${encodeURIComponent(pestana + '!' + rango)}?valueInputOption=RAW`,
-    {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: [[valor]] })
-    }
-  )
-}
-
-// Añadir fila nueva al final
-const sheetsAppend = async (token, pestana, fila) => {
-  await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${encodeURIComponent(pestana)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
-    {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: [fila] })
-    }
-  )
+const sheetsAnyadir = async (pestana, fila) => {
+  await fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ accion: 'anyadir', pestana, fila })
+  })
 }
 
 const OPENAI_KEY = ['sk-proj-WUCN3UA','1g2h-gRCqSJ2YGd','gOYNTR3jwudNegM','bhcwmFFytR718-2','LzcDQNh1Z2e2-OI','JKk71-zT3BlbkFJ','zb0PWnkjJI09hpt','8vxdaEbn0Tn1KO_','uGZ02OyRboRxqcG','aF1nurCvE0vLxXe','ySwAUNVCVsW-cA'].join('')
@@ -1018,24 +938,22 @@ Si no hay productos con fecha: {"productos": []}`
     let actualizados = 0
 
     try {
-      const token = await getSheetsToken()
-
       for (const item of fechasResultados) {
         if (item.ignorar) continue
 
         const pestana = detectarPestana(item.nombre)
-        const filas = await sheetsRead(token, pestana)
+        const filas = await sheetsLeer(pestana)
         if (!filas || filas.length === 0) continue
 
-        // Detectar columnas de caducidad en la fila de cabeceras
+        // Detectar columnas de caducidad en cabecera
         const cabecera = filas[0].map(c => (c || '').toLowerCase())
         const colsCaducidad = []
         cabecera.forEach((c, i) => {
-          if (c.includes('caducidad') || c.includes('caducidad')) colsCaducidad.push(i)
+          if (c.includes('caducidad')) colsCaducidad.push(i)
         })
         if (colsCaducidad.length === 0) continue
 
-        // Buscar el producto en la hoja
+        // Buscar producto en la hoja
         const nombreItem = item.nombre.toLowerCase().replace(/opciones[^,]*/gi, '').trim()
         const palabrasItem = nombreItem.split(' ').filter(w => w.length > 3)
 
@@ -1050,12 +968,11 @@ Si no hay productos con fecha: {"productos": []}`
           }
         }
 
-        // Convertir fecha YYYY-MM-DD a MM/YYYY para Google Sheets
+        // Formato fecha MM/YYYY para el Sheet
         const fechaSheet = item.fecha ? item.fecha.slice(5, 7) + '/' + item.fecha.slice(0, 4) : ''
         const anioMesItem = item.fecha ? item.fecha.slice(0, 7) : ''
 
         if (filaIdx >= 0) {
-          // Producto encontrado — buscar columna de caducidad vacía o con misma fecha
           const fila = filas[filaIdx]
           let yaExiste = false
           let colVacia = -1
@@ -1065,15 +982,10 @@ Si no hay productos con fecha: {"productos": []}`
             if (!val || val === 'SIN FECHA') {
               if (colVacia === -1) colVacia = col
             } else {
-              // Comparar mes/año
               const partes = val.split('/')
-              let anioMesFila = ''
               if (partes.length === 2) {
-                anioMesFila = partes[1] + '-' + partes[0].padStart(2, '0')
-              }
-              if (anioMesFila === anioMesItem) {
-                yaExiste = true
-                break
+                const anioMesFila = partes[1] + '-' + partes[0].padStart(2, '0')
+                if (anioMesFila === anioMesItem) { yaExiste = true; break }
               }
             }
           }
@@ -1081,13 +993,10 @@ Si no hay productos con fecha: {"productos": []}`
           if (yaExiste) {
             ignorados++
           } else if (colVacia >= 0) {
-            // Escribir en la primera columna vacía
-            const colLetra = String.fromCharCode(65 + colVacia)
-            const numFila = filaIdx + 1
-            await sheetsWrite(token, pestana, colLetra + numFila, fechaSheet)
+            await sheetsEscribir(pestana, filaIdx + 1, colVacia + 1, fechaSheet)
             actualizados++
           } else {
-            // Todas llenas — buscar la fecha más antigua y sobrescribirla
+            // Todas llenas → sobrescribir la más antigua
             let colMasAntigua = colsCaducidad[0]
             let fechaMasAntigua = null
             for (const col of colsCaducidad) {
@@ -1103,27 +1012,24 @@ Si no hay productos con fecha: {"productos": []}`
                 }
               }
             }
-            const colLetra = String.fromCharCode(65 + colMasAntigua)
-            const numFila = filaIdx + 1
-            await sheetsWrite(token, pestana, colLetra + numFila, fechaSheet)
+            await sheetsEscribir(pestana, filaIdx + 1, colMasAntigua + 1, fechaSheet)
             actualizados++
           }
         } else {
-          // Producto no existe → añadir fila nueva
-          const nuevaFila = ['', item.nombre, fechaSheet]
-          await sheetsAppend(token, pestana, nuevaFila)
+          // No existe → crear fila nueva
+          await sheetsAnyadir(pestana, ['', item.nombre, fechaSheet])
           creados++
         }
       }
     } catch(e) {
       console.error('Sheets error:', e)
-      showToast('Error conectando con Google Sheets', 'error')
+      showToast('Error: ' + e.message, 'error')
       setFechasLoading(false)
       return
     }
 
     let msg = ''
-    if (creados > 0) msg += creados + ' nuevas en Sheets'
+    if (creados > 0) msg += creados + ' nuevas'
     if (actualizados > 0) msg += (msg ? ' · ' : '') + actualizados + ' actualizadas'
     if (ignorados > 0) msg += (msg ? ' · ' : '') + ignorados + ' ya existian'
     if (!msg) msg = 'Sin cambios'
@@ -1133,482 +1039,4 @@ Si no hay productos con fecha: {"productos": []}`
     setFechasLoading(false)
   }
 
-  const eliminarProducto = async (id) => {
-    if (!window.confirm('Eliminar este producto?')) return
-    await supabase.from('productos').delete().eq('id', id)
-    showToast('Eliminado')
-  }
 
-  if (!usuario) return (
-    <div className="login-screen">
-      <div className="login-box">
-        <div className="login-logo">
-          <span className="logo-main">SINHUMO</span>
-          <span className="logo-sub">GINES STOCK</span>
-        </div>
-        <div className="login-form">
-          <label>Usuario</label>
-          <input
-            type="text"
-            placeholder="admin / user"
-            value={loginUser}
-            onChange={e => setLoginUser(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            autoComplete="off"
-          />
-          <label>Contraseña</label>
-          <input
-            type="password"
-            placeholder="••••"
-            value={loginPass}
-            onChange={e => setLoginPass(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleLogin()}
-          />
-          {loginError && <div className="login-error">{loginError}</div>}
-          <button className="btn-primary login-btn" onClick={handleLogin}>Entrar</button>
-        </div>
-      </div>
-    </div>
-  )
-
-  if (loading) return <div className="loading-screen"><div className="loading-dot" /><span>Conectando...</span></div>
-
-  return (
-    <div className={'app' + (temaOscuro ? '' : ' tema-claro')}>
-      {toast && <div className={'toast toast-' + toast.type}>{toast.msg}</div>}
-
-      <header className="header">
-        <div className="header-left">
-          <div className="logo">
-            <span className="logo-main">SINHUMO</span>
-            <span className="logo-sub">GINES STOCK</span>
-          </div>
-          <div className="realtime-badge"><span className="pulse" />EN VIVO</div>
-        </div>
-        <div className="header-right">
-          {esAdmin && <button className="btn-pdf" onClick={() => { setPdfFile(null); setPdfResultados([]); setPdfPaso(1); setModalVentasPDF(true) }}>PDF Ventas</button>}
-          {esAdmin && <button className="btn-albaran" onClick={() => { setAlbaranImg(null); setAlbaranPreview(null); setAlbaranResultados([]); setAlbaranPaso(1); setModalAlbaran(true) }}>📦 Stock pedido</button>}
-          {esAdmin && <button className="btn-fechas" onClick={() => { setFechasImg(null); setFechasPreview(null); setFechasResultados([]); setFechasPaso(1); setModalFechas(true) }}>📅 Fechas pedido</button>}
-          <button className={"btn-tabs" + (tab === 'sinstock' ? ' btn-tab-active' : '')} onClick={() => setTab('sinstock')}>Sin Stock</button>
-          <button className={"btn-tabs" + (tab === 'stock' ? ' btn-tab-active' : '')} onClick={() => setTab('stock')}>Stock</button>
-          <button className={"btn-cad" + (tab === 'caducidades' ? ' btn-tab-active' : '')} onClick={() => setTab('caducidades')}>Caducidades</button>
-          <button className={"btn-tabs" + (tab === 'historial' ? ' btn-tab-active' : '')} onClick={() => setTab('historial')}>Historial</button>
-          <button className={"btn-informe" + (tab === 'informe' ? ' btn-tab-active' : '')} onClick={() => setTab('informe')}>Informe</button>
-          <button className="btn-tema" onClick={() => { const nuevo = !temaOscuro; setTemaOscuro(nuevo); localStorage.setItem('tema', nuevo ? 'oscuro' : 'claro') }}>{temaOscuro ? '☀️' : '🌙'}</button>
-          <div className="user-badge">{usuario}</div>
-          <button className="btn-logout" onClick={handleLogout}>Salir</button>
-          {esAdmin && <button className="btn-primary" onClick={() => { setForm({ nombre: '', categoria: 'Nicotina', stock_actual: 0, stock_minimo: 5, precio: 0 }); setModalProducto('nuevo') }}>+ Nuevo producto</button>}
-        </div>
-      </header>
-
-      {tab === 'sinstock' ? (
-        <>
-          <div className="metrics">
-            <div className="metric danger"><div className="metric-label">Sin stock</div><div className="metric-value">{sinStock}</div></div>
-            <div className="metric warn"><div className="metric-label">Stock bajo</div><div className="metric-value">{stockBajo}</div></div>
-            <div className="metric"><div className="metric-label">Total productos</div><div className="metric-value">{totalProductos}</div></div>
-            <div className="metric"><div className="metric-label">Valor inventario</div><div className="metric-value">€{valorTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>
-          </div>
-          <div className="toolbar">
-            <input className="search" placeholder="Buscar producto sin stock..." value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-          </div>
-          <div className="table-wrap">
-            <table className="tabla">
-              <thead><tr><th>Producto</th><th>Categoria</th><th>Minimo</th><th>Precio</th><th>Acciones</th></tr></thead>
-              <tbody>
-                {productos.filter(p => p.stock_actual === 0 && p.nombre.toLowerCase().includes(busqueda.toLowerCase())).length === 0
-                  ? <tr><td colSpan="5" className="empty">No hay productos sin stock</td></tr>
-                  : productos.filter(p => p.stock_actual === 0 && p.nombre.toLowerCase().includes(busqueda.toLowerCase())).map(p => (
-                    <tr key={p.id} className="row-out">
-                      <td className="td-nombre">{p.nombre}</td>
-                      <td className="td-cat">{p.categoria}</td>
-                      <td className="td-min">{p.stock_minimo}</td>
-                      <td className="td-precio">€{Number(p.precio).toFixed(2)}</td>
-                      <td>
-                        <div className="acciones">
-                          <button className="btn-entrada" onClick={() => { setModalEntrada(p); setEntradaForm({ cantidad: 1, referencia: '' }) }}>+ Entrada</button>
-                          {esAdmin && <button className="btn-edit" onClick={() => { setForm({ nombre: p.nombre, categoria: p.categoria, stock_actual: p.stock_actual, stock_minimo: p.stock_minimo, precio: p.precio }); setModalProducto(p) }}>editar</button>}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </div>
-        </>
-      ) : tab === 'stock' ? (
-        <>
-          <div className="metrics">
-            <div className="metric"><div className="metric-label">Total productos</div><div className="metric-value">{totalProductos}</div></div>
-            <div className="metric"><div className="metric-label">Valor inventario</div><div className="metric-value">{'EUR' + valorTotal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div>
-            <div className="metric warn"><div className="metric-label">Stock bajo</div><div className="metric-value">{stockBajo}</div></div>
-            <div className="metric danger"><div className="metric-label">Sin stock</div><div className="metric-value">{sinStock}</div></div>
-          </div>
-
-          <div className="toolbar">
-            <input className="search" placeholder="Buscar producto..." value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-            <div className="cat-filters">
-              {TODAS_CATS.map(c => {
-                const esSub = CATEGORIAS_TREE.some(cat => cat.sub.includes(c))
-                return (
-                  <button
-                    key={c}
-                    className={'cat-btn' + (catFiltro === c ? ' active' : '') + (esSub ? ' cat-sub' : '')}
-                    onClick={() => setCatFiltro(c)}
-                  >
-                    {esSub ? '  › ' + c : c}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="table-wrap">
-            <table className="tabla">
-              <thead>
-                <tr><th>Producto</th><th>Categoria</th><th>Stock</th><th>Minimo</th><th>Precio</th><th>Estado</th><th>Actualizado</th><th>Acciones</th></tr>
-              </thead>
-              <tbody>
-                {productosFiltrados.length === 0
-                  ? <tr><td colSpan="8" className="empty">No hay productos que coincidan</td></tr>
-                  : productosFiltrados.map(p => {
-                    const est = estadoProducto(p)
-                    return (
-                      <tr key={p.id} className={est.cls === 'out' ? 'row-out' : est.cls === 'low' ? 'row-low' : ''}>
-                        <td className="td-nombre">{p.nombre}</td>
-                        <td className="td-cat">{p.categoria}</td>
-                        <td className={'td-stock stock-' + est.cls}>{p.stock_actual}</td>
-                        <td className="td-min">{p.stock_minimo}</td>
-                        <td className="td-precio">{'EUR' + Number(p.precio).toFixed(2)}</td>
-                        <td><span className={'badge badge-' + est.cls}>{est.label}</span></td>
-                        <td className="td-time">{timeAgo(p.updated_at)}</td>
-                        <td>
-                          <div className="acciones">
-                            <button className="btn-venta" onClick={() => { setModalVenta(p); setVentaForm({ cantidad: 1, referencia: '' }) }}>- Venta</button>
-                            <button className="btn-entrada" onClick={() => { setModalEntrada(p); setEntradaForm({ cantidad: 1, referencia: '' }) }}>+ Entrada</button>
-                            {esAdmin && <button className="btn-edit" onClick={() => { setForm({ nombre: p.nombre, categoria: p.categoria, stock_actual: p.stock_actual, stock_minimo: p.stock_minimo, precio: p.precio }); setModalProducto(p) }}>editar</button>}
-                            {esAdmin && <button className="btn-del" onClick={() => eliminarProducto(p.id)}>x</button>}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                }
-              </tbody>
-            </table>
-          </div>
-        </>
-      ) : tab === 'informe' ? (
-        <InformeTab movimientos={movimientos} productos={productos} />
-      ) : tab === 'caducidades' ? (
-        <CaducidadesTab
-          caducidades={caducidades}
-          cadBusqueda={cadBusqueda}
-          setCadBusqueda={setCadBusqueda}
-          cadFiltro={cadFiltro}
-          setCadFiltro={setCadFiltro}
-          supabase={supabase}
-          showToast={showToast}
-          esAdmin={esAdmin}
-        />
-      ) : (
-        <div className="historial">
-          <h2 className="historial-title">Historial de movimientos</h2>
-          <div className="table-wrap">
-            <table className="tabla">
-              <thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cantidad</th><th>Referencia</th></tr></thead>
-              <tbody>
-                {movimientos.length === 0
-                  ? <tr><td colSpan="5" className="empty">No hay movimientos aun</td></tr>
-                  : movimientos.map(m => (
-                    <tr key={m.id}>
-                      <td className="td-time">{new Date(m.created_at).toLocaleString('es-ES')}</td>
-                      <td className="td-nombre">{m.productos ? m.productos.nombre : '-'}</td>
-                      <td><span className={'badge badge-' + (m.tipo === 'venta' ? 'out' : 'ok')}>{m.tipo}</span></td>
-                      <td className={'td-stock stock-' + (m.cantidad < 0 ? 'out' : 'ok')}>{m.cantidad > 0 ? '+' + m.cantidad : m.cantidad}</td>
-                      <td className="td-cat">{m.referencia || '-'}</td>
-                    </tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {modalProducto && (
-        <Modal title={modalProducto === 'nuevo' ? 'Nuevo producto' : 'Editar producto'} onClose={() => setModalProducto(null)}>
-          <div className="modal-body">
-            <label>Nombre del producto</label>
-            <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Nicokit 50/50 15mg By Sinhumo" />
-            <label>Categoria</label>
-            <select value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })}>
-              {CATEGORIAS_SELECTOR.map(c => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-            {modalProducto === 'nuevo' && (
-              <>
-                <label>Stock inicial</label>
-                <input type="number" min="0" value={form.stock_actual} onChange={e => setForm({ ...form, stock_actual: e.target.value })} />
-              </>
-            )}
-            <label>Alerta stock minimo</label>
-            <input type="number" min="0" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} />
-            <label>Precio unitario (EUR)</label>
-            <input type="number" min="0" step="0.01" value={form.precio} onChange={e => setForm({ ...form, precio: e.target.value })} />
-            <div className="modal-footer">
-              <button className="btn-cancel" onClick={() => setModalProducto(null)}>Cancelar</button>
-              <button className="btn-primary" onClick={guardarProducto}>Guardar</button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {modalEntrada && (
-        <Modal title={'+ Entrada - ' + modalEntrada.nombre} onClose={() => setModalEntrada(null)}>
-          <div className="modal-body">
-            <div className="venta-info">Stock actual: <strong>{modalEntrada.stock_actual} uds</strong></div>
-            <label>Unidades a anadir</label>
-            <input type="number" min="1" value={entradaForm.cantidad} onChange={e => setEntradaForm({ ...entradaForm, cantidad: e.target.value })} />
-            <label>Referencia (opcional)</label>
-            <input value={entradaForm.referencia} onChange={e => setEntradaForm({ ...entradaForm, referencia: e.target.value })} placeholder="Ej: Pedido mayo, Albaran #123" />
-            <div className="modal-footer">
-              <button className="btn-cancel" onClick={() => setModalEntrada(null)}>Cancelar</button>
-              <button className="btn-entrada-modal" onClick={registrarEntrada}>+ Confirmar entrada</button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {modalVenta && (
-        <Modal title={'Venta - ' + modalVenta.nombre} onClose={() => setModalVenta(null)}>
-          <div className="modal-body">
-            <div className="venta-info">Stock disponible: <strong>{modalVenta.stock_actual} uds</strong></div>
-            <label>Unidades vendidas</label>
-            <input type="number" min="1" max={modalVenta.stock_actual} value={ventaForm.cantidad} onChange={e => setVentaForm({ ...ventaForm, cantidad: e.target.value })} />
-            <label>Referencia (opcional)</label>
-            <input value={ventaForm.referencia} onChange={e => setVentaForm({ ...ventaForm, referencia: e.target.value })} placeholder="Ticket #1234" />
-            <div className="modal-footer">
-              <button className="btn-cancel" onClick={() => setModalVenta(null)}>Cancelar</button>
-              <button className="btn-danger" onClick={registrarVenta}>Confirmar venta</button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {modalAlbaran && (
-        <Modal title="Escanear pedido con IA" onClose={() => setModalAlbaran(false)} wide>
-          <div className="modal-body">
-            {albaranPaso === 1 && (
-              <>
-                <div className="albaran-zona" onClick={() => fileRef.current.click()}>
-                  {albaranPreview
-                    ? <img src={albaranPreview} alt="Albaran" className="albaran-preview" />
-                    : <div className="albaran-placeholder">
-                        <div className="albaran-icon">foto</div>
-                        <div className="albaran-hint">Toca para subir foto del albaran o pedido</div>
-                        <div className="albaran-sub">Funciona con albaranes, facturas o fotos de cajas</div>
-                      </div>
-                  }
-                </div>
-                <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleFotoAlbaran} />
-                {albaranPreview && !albaranLoading && (
-                  <div className="modal-footer">
-                    <button className="btn-cancel" onClick={() => { setAlbaranImg(null); setAlbaranPreview(null) }}>Cambiar foto</button>
-                    <button className="btn-primary" onClick={analizarAlbaran}>Analizar con IA</button>
-                  </div>
-                )}
-                {albaranLoading && <div className="albaran-loading"><div className="loading-dot" /><span>La IA esta leyendo el albaran...</span></div>}
-              </>
-            )}
-            {albaranPaso === 2 && (
-              <>
-                <div className="albaran-resumen">La IA encontro <strong>{albaranResultados.length} productos</strong>. Revisa y ajusta:</div>
-                <div className="albaran-lista">
-                  {albaranResultados.map((item, i) => (
-                    <div key={i} className={'albaran-item' + (item.ignorar ? ' ignorado' : '')}>
-                      <div className="albaran-item-top">
-                        <div className="albaran-item-nombre">
-                          <input className="albaran-nombre-input" value={item.nombre} onChange={e => { const c = [...albaranResultados]; c[i] = { ...c[i], nombre: e.target.value }; setAlbaranResultados(c) }} />
-                          {item.encontrado ? <span className="badge badge-ok">Existe</span> : <span className="badge badge-new">Nuevo</span>}
-                        </div>
-                        <div className="albaran-item-qty">
-                          <label>Uds</label>
-                          <input type="number" min="1" value={item.cantidad} className="qty-small" onChange={e => { const c = [...albaranResultados]; c[i] = { ...c[i], cantidad: e.target.value }; setAlbaranResultados(c) }} />
-                        </div>
-                        <button className={'btn-ignorar' + (item.ignorar ? ' btn-ignorar-on' : '')} onClick={() => { const c = [...albaranResultados]; c[i] = { ...c[i], ignorar: !c[i].ignorar }; setAlbaranResultados(c) }}>
-                          {item.ignorar ? 'Incluir' : 'Ignorar'}
-                        </button>
-                      </div>
-                      {item.crear_nuevo && !item.ignorar && (
-                        <div className="albaran-cat-sel">
-                          <label>Categoria:</label>
-                          <select value={item.categoria || 'Otros'} onChange={e => { const c = [...albaranResultados]; c[i] = { ...c[i], categoria: e.target.value }; setAlbaranResultados(c) }}>
-                            {CATEGORIAS_SELECTOR.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <div className="modal-footer">
-                  <button className="btn-cancel" onClick={() => setAlbaranPaso(1)}>Volver</button>
-                  <button className="btn-primary" onClick={confirmarAlbaran} disabled={albaranLoading}>
-                    {albaranLoading ? 'Actualizando...' : 'Anadir ' + albaranResultados.filter(r => !r.ignorar).length + ' al stock'}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </Modal>
-      )}
-
-      {modalVentasPDF && (
-        <Modal title="Descontar ventas del PDF" onClose={() => setModalVentasPDF(false)} wide>
-          <div className="modal-body">
-            {pdfPaso === 1 && (
-              <>
-                <div className="pdf-info-box">La IA leera tu PDF de ventas y descontara automaticamente cada producto del stock.</div>
-                <div className="albaran-zona" onClick={() => pdfRef.current.click()}>
-                  {pdfFile
-                    ? <div className="pdf-seleccionado">
-                        <div className="pdf-icon">PDF</div>
-                        <div className="pdf-nombre">{pdfFile.name}</div>
-                        <div className="albaran-sub">Listo para analizar</div>
-                      </div>
-                    : <div className="albaran-placeholder">
-                        <div className="albaran-icon">PDF</div>
-                        <div className="albaran-hint">Toca para subir el PDF de ventas del dia</div>
-                        <div className="albaran-sub">El mismo PDF que exportas de Velneo cada dia</div>
-                      </div>
-                  }
-                </div>
-                <input ref={pdfRef} type="file" accept="application/pdf" style={{ display: 'none' }} onChange={handlePdfVentas} />
-                {pdfFile && !pdfLoading && (
-                  <div className="modal-footer">
-                    <button className="btn-cancel" onClick={() => setPdfFile(null)}>Cambiar PDF</button>
-                    <button className="btn-primary" onClick={analizarPdfVentas}>Analizar con IA</button>
-                  </div>
-                )}
-                {pdfLoading && <div className="albaran-loading"><div className="loading-dot" /><span>La IA esta leyendo las ventas...</span></div>}
-              </>
-            )}
-            {pdfPaso === 2 && (
-              <>
-                <div className="albaran-resumen">La IA encontro <strong>{pdfResultados.length} productos vendidos</strong>. Revisa antes de descontar:</div>
-                <div className="albaran-lista">
-                  {pdfResultados.map((item, i) => (
-                    <div key={i} className={'albaran-item' + (item.ignorar ? ' ignorado' : '')}>
-                      <div className="albaran-item-top">
-                        <div className="albaran-item-nombre">
-                          <span className="albaran-nombre-txt">{item.nombre}</span>
-                          {item.encontrado ? <span className="badge badge-ok">En stock</span> : <span className="badge badge-warn">No encontrado</span>}
-                        </div>
-                        <div className="albaran-item-qty">
-                          <label>Vendidas</label>
-                          <input type="number" min="1" value={item.cantidad} className="qty-small" onChange={e => { const c = [...pdfResultados]; c[i] = { ...c[i], cantidad: e.target.value }; setPdfResultados(c) }} />
-                        </div>
-                        <button className={'btn-ignorar' + (item.ignorar ? ' btn-ignorar-on' : '')} onClick={() => { const c = [...pdfResultados]; c[i] = { ...c[i], ignorar: !c[i].ignorar }; setPdfResultados(c) }}>
-                          {item.ignorar ? 'Incluir' : 'Ignorar'}
-                        </button>
-                      </div>
-                      {item.encontrado && !item.ignorar && (
-                        <div className="pdf-stock-preview">
-                          Stock actual: <strong>{item.encontrado.stock_actual}</strong> despues: <strong className={item.encontrado.stock_actual - item.cantidad <= 0 ? 'txt-red' : item.encontrado.stock_actual - item.cantidad <= item.encontrado.stock_minimo ? 'txt-amber' : 'txt-green'}>{Math.max(0, item.encontrado.stock_actual - parseInt(item.cantidad))}</strong>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <div className="modal-footer">
-                  <button className="btn-cancel" onClick={() => setPdfPaso(1)}>Volver</button>
-                  <button className="btn-danger" onClick={confirmarPdfVentas} disabled={pdfLoading}>
-                    {pdfLoading ? 'Descontando...' : 'Descontar ' + pdfResultados.filter(r => !r.ignorar && r.encontrado).length + ' productos'}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </Modal>
-      )}
-
-      {modalFechas && (
-        <Modal title="📅 Actualizar fechas de caducidad" onClose={() => setModalFechas(false)} wide>
-          <div className="modal-body">
-            {fechasPaso === 1 && (<>
-              <div className="pdf-info-box">
-                Sube foto del albaran con las fechas escritas a mano. La IA leeara solo las fechas, sin tocar el stock.
-              </div>
-              <div className="albaran-zona" onClick={() => fechasRef.current.click()}>
-                {fechasPreview
-                  ? <img src={fechasPreview} alt="Albaran fechas" className="albaran-preview" />
-                  : <div className="albaran-placeholder">
-                      <div className="albaran-icon">📅</div>
-                      <div className="albaran-hint">Foto del albaran con fechas escritas a mano</div>
-                      <div className="albaran-sub">La IA leera las fechas junto a cada producto</div>
-                    </div>
-                }
-              </div>
-              <input ref={fechasRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleFotoFechas} />
-              {fechasPreview && !fechasLoading && (
-                <div className="modal-footer">
-                  <button className="btn-cancel" onClick={() => { setFechasImg(null); setFechasPreview(null) }}>Cambiar foto</button>
-                  <button className="btn-primary" onClick={analizarFechas}>📅 Analizar fechas con IA</button>
-                </div>
-              )}
-              {fechasLoading && <div className="albaran-loading"><div className="loading-dot" /><span>La IA esta leyendo las fechas...</span></div>}
-            </>)}
-
-            {fechasPaso === 2 && (<>
-              {fechasResultados.length === 0
-                ? <div className="albaran-resumen" style={{color:'var(--amber)'}}>⚠️ La IA no encontró ningún producto con fecha de caducidad en esta imagen. Asegúrate de que se vean bien las anotaciones escritas a mano.</div>
-                : <div className="albaran-resumen">La IA encontró <strong>{fechasResultados.length} productos con fecha</strong>. Revisa y corrige si hace falta:</div>
-              }
-              <div className="albaran-lista">
-                {fechasResultados.map((item, i) => (
-                  <div key={i} className={'albaran-item' + (item.ignorar ? ' ignorado' : '')}>
-                    <div className="albaran-item-top">
-                      <div className="albaran-item-nombre">
-                        <span className="albaran-nombre-txt">{item.nombre}</span>
-                        {item.accion === 'actualizar'
-                          ? <span className="badge badge-warn">🔄 Actualizar fecha</span>
-                          : <span className="badge badge-new">✨ Nuevo</span>
-                        }
-                      </div>
-                      <div className="albaran-item-qty" style={{flexDirection:'column', alignItems:'flex-end', gap:'2px'}}>
-                        {item.fecha_raw && <span style={{fontSize:'12px', fontWeight:'600', color:'var(--blue)', fontFamily:'var(--mono)', background:'rgba(59,130,246,0.12)', padding:'2px 8px', borderRadius:'4px', border:'1px solid rgba(59,130,246,0.25)'}}>📅 {item.fecha_raw}</span>}
-                        <input type="date" value={item.fecha || ''} className="qty-small" style={{width: '140px'}}
-                          onChange={e => { const c = [...fechasResultados]; c[i] = { ...c[i], fecha: e.target.value, yaExiste: false }; setFechasResultados(c) }} />
-                      </div>
-                      <button className={'btn-ignorar' + (item.ignorar ? ' btn-ignorar-on' : '')}
-                        onClick={() => { const c = [...fechasResultados]; c[i] = { ...c[i], ignorar: !c[i].ignorar }; setFechasResultados(c) }}>
-                        {item.ignorar ? 'Incluir' : 'Ignorar'}
-                      </button>
-                    </div>
-                    {item.yaExiste && !item.ignorar && (
-                      <div className="pdf-stock-preview" style={{color: 'var(--amber)'}}>
-                        Esta fecha ya existe en caducidades — no se duplicará
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="modal-footer">
-                <button className="btn-cancel" onClick={() => setFechasPaso(1)}>Volver a analizar</button>
-                <button className="btn-primary" onClick={confirmarFechas} disabled={fechasLoading || fechasResultados.filter(r => !r.ignorar && !r.yaExiste).length === 0}>
-                  {fechasLoading ? 'Guardando...' : 
-                    'Guardar ' + fechasResultados.filter(r => !r.ignorar && r.accion === 'crear').length + ' nuevas · ' +
-                    'Actualizar ' + fechasResultados.filter(r => !r.ignorar && r.accion === 'actualizar').length
-                  }
-                </button>
-              </div>
-            </>)}
-          </div>
-        </Modal>
-      )}
-
-    </div>
-  )
-}
