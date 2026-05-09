@@ -8,13 +8,14 @@ const detectarPestana = (nombre) => {
   const n = nombre.toLowerCase()
   if (n.includes('minilongfill')) return 'MiniLongfill'
   if (n.includes('longfill')) return 'Longfill'
-  if (n.startsWith('sales') || n.startsWith('sale ')) return 'Sales'
+  if (n.startsWith('sales ') || n.startsWith('sales	') || /^sales[^a-z]/i.test(nombre)) return 'Sales'
   if (n.includes('aromanic')) return 'Aromanic'
   if (n.startsWith('aroma')) return 'Aromas'
-  if (n.includes('base') || n.includes('bases')) return 'Bases'
   if (n.includes('nicokit')) return 'Nicokits'
-  if (n.includes('cafeina') || n.includes('nicotina') || n.includes('pouche')) return 'Cafeina & Nicotina'
-  return 'Desechables'
+  if (n.includes('base ') || n.includes('base 1') || n.startsWith('base')) return 'Bases'
+  if (n.includes('cafeina') || n.includes('nicotina') || n.includes('pouche') || n.includes('bolsa')) return 'Cafeina & Nicotina'
+  if (n.includes('desechable') || n.includes('pod') || n.includes('disposable')) return 'Desechables'
+  return 'Liquidos'
 }
 
 const sheetsLeer = async (pestana) => {
