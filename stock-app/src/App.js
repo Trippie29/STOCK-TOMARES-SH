@@ -12,7 +12,7 @@ const detectarPestana = (nombre) => {
   if (n.includes('aromanic')) return 'Aromanic'
   if (n.startsWith('aroma')) return 'Aromas'
   if (n.includes('nicokit')) return 'Nicokits'
-  if (n.includes('base ') || n.includes('base 1') || n.startsWith('base')) return 'Bases'
+  if (n.includes('base ') || n.includes('base 1') || n.startsWith('base') || n.includes('pack de base') || n.includes('pack base')) return 'Bases'
   if (n.includes('cafeina') || n.includes('nicotina') || n.includes('pouche') || n.includes('bolsa')) return 'Cafeina & Nicotina'
   if (n.includes('desechable') || n.includes('pod') || n.includes('disposable')) return 'Desechables'
   return 'Liquidos'
