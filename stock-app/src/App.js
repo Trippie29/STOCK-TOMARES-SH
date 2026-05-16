@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from './supabase'
 import './App.css'
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwjvT661HK307w25F_AMxT4-KfkaCp6BSqMthKgw-R5vGrjFZmWMxhD4uqP63PPm236TA/exec'
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzt00vxH0GE9OaXNw_1P05A2oLWAjQ-2eRqpjs3LVL2ae5oikGVSUjyMfjeVSOGBVct/exec'
 
 const detectarPestana = (nombre) => {
   const n = nombre.toLowerCase()
